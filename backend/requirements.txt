@@ -1,7 +1,7 @@
-fastapi
-uvicorn
-kociemba
-opencv-python-headless
-numpy
-python-multipart
-scikit-learn
+fastapi>=0.115.0,<1.0.0
+uvicorn[standard]>=0.34.0,<1.0.0
+kociemba>=1.2.1
+opencv-python-headless>=4.10.0
+numpy>=2.0.0,<3.0.0
+python-multipart>=0.0.18
+scikit-learn>=1.6.0

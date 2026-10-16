@@ -1,5 +1,6 @@
 # IDEs and Editors
 .idea/
+**/.idea/
 .vscode/
 *.swp
 .DS_Store

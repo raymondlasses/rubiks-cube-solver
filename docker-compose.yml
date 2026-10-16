@@ -9,7 +9,7 @@ services:
   frontend:
     build: ./frontend
     ports:
-      - "3000:5173" # Map host port 3000 to container port 5173 (Vite default)
+      - "5173:5173" # Map host port 5173 to container port 5173 (Vite default)
     volumes:
       - ./frontend:/app # Live reload for React code
       - /app/node_modules # Prevent overwriting node_modules

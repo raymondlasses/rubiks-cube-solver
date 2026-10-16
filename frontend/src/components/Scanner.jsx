@@ -1,35 +1,127 @@
 import { useEffect, useRef, useState } from 'react';
 import axios from 'axios';
 import { Cube3D, VisualizerControls } from './CubeVisualizer';
+import DotMatrixBackground from './DotMatrixBackground';
 
-const MODERN_FONT = 'Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif';
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
-const SPACE_GRAY = '#0B0C10';
-const PANEL_BG = '#12151C';
-const AMAZON_GREEN = '#1FA658';
-const BANANA_YELLOW = '#FCD12A';
-const POMEGRANATE_RED = '#D82B33';
+const SPACE_BLACK = '#08090C';
+const PANEL_BG = '#0E1117';
+const CARD_BG = '#141820';
+const ORANGE_PRIMARY = '#FF6B00';
+const ORANGE_HOVER = '#FF8533';
+const TEXT_PRIMARY = '#F0F2F8';
+const TEXT_SECONDARY = '#9AA0B0';
+const RED_ACCENT = '#EF4444';
+
+const DIAGNOSTIC_COLOR_MAP = {
+    white: '#FFFFFF',
+    yellow: '#FFE600',
+    green: '#00E676',
+    blue: '#2979FF',
+    red: '#FF3D57',
+    orange: '#FF9100',
+    unknown: '#8A92A4'
+};
+
+const MIRRORED_DIAGNOSTIC_INDICES = [2, 1, 0, 5, 4, 3, 8, 7, 6];
 
 const btnStyle = {
-    padding: '12px 20px', background: 'rgba(31, 166, 88, 0.05)', color: AMAZON_GREEN,
-    border: `2px solid ${AMAZON_GREEN}`, borderRadius: '8px', cursor: 'pointer',
-    fontWeight: '800', textTransform: 'uppercase', letterSpacing: '1px',
-    boxShadow: `0 0 12px rgba(31, 166, 88, 0.3), inset 0 0 5px rgba(31, 166, 88, 0.1)`,
-    transition: 'all 0.2s ease-out'
+    padding: '11px 20px',
+    background: 'rgba(255, 107, 0, 0.08)',
+    color: ORANGE_PRIMARY,
+    border: `1.5px solid ${ORANGE_PRIMARY}`,
+    borderRadius: '8px',
+    cursor: 'pointer',
+    fontFamily: 'var(--font-body)',
+    fontWeight: '700',
+    fontSize: '13px',
+    textTransform: 'uppercase',
+    letterSpacing: '0.8px',
+    transition: 'all 0.2s ease',
+    outline: 'none'
 };
 
 const redBtnStyle = {
-    ...btnStyle, color: POMEGRANATE_RED, border: `2px solid ${POMEGRANATE_RED}`, background: 'rgba(216, 43, 51, 0.05)',
-    boxShadow: `0 0 12px rgba(216, 43, 51, 0.3), inset 0 0 5px rgba(216, 43, 51, 0.1)`
+    ...btnStyle,
+    color: RED_ACCENT,
+    border: `1.5px solid ${RED_ACCENT}`,
+    background: 'rgba(239, 68, 68, 0.08)'
 };
 
-const formatColorName = (name) => {
-    if (!name) return "";
-    return name.charAt(0).toUpperCase() + name.slice(1).toLowerCase();
+const neutralBtnStyle = {
+    ...btnStyle,
+    color: '#D0D4DC',
+    border: '1.5px solid rgba(255, 255, 255, 0.16)',
+    background: 'rgba(255, 255, 255, 0.03)'
 };
+
+const CALIBRATION_STEPS = [
+    {
+        key: 'up',
+        name: 'White',
+        colorName: 'white',
+        colorHex: '#FFFFFF',
+        textHex: '#000000',
+        badge: 'TOP (U)',
+        logoTip: true,
+        desc: 'Hold WHITE center face. If it has a logo or brand mark, keep it centered—our corner sampling automatically avoids it!'
+    },
+    {
+        key: 'down',
+        name: 'Yellow',
+        colorName: 'yellow',
+        colorHex: '#FFD500',
+        textHex: '#000000',
+        badge: 'BOTTOM (D)',
+        desc: 'Hold YELLOW center face squarely within the alignment grid.'
+    },
+    {
+        key: 'front',
+        name: 'Green',
+        colorName: 'green',
+        colorHex: '#00B348',
+        textHex: '#FFFFFF',
+        badge: 'FRONT (F)',
+        desc: 'Hold GREEN center face squarely within the alignment grid.'
+    },
+    {
+        key: 'back',
+        name: 'Blue',
+        colorName: 'blue',
+        colorHex: '#0055D4',
+        textHex: '#FFFFFF',
+        badge: 'BACK (B)',
+        desc: 'Hold BLUE center face squarely within the alignment grid.'
+    },
+    {
+        key: 'right',
+        name: 'Red',
+        colorName: 'red',
+        colorHex: '#D91E2E',
+        textHex: '#FFFFFF',
+        badge: 'RIGHT (R)',
+        desc: 'Hold RED center face squarely within the alignment grid.'
+    },
+    {
+        key: 'left',
+        name: 'Orange',
+        colorName: 'orange',
+        colorHex: '#FF6500',
+        textHex: '#FFFFFF',
+        badge: 'LEFT (L)',
+        desc: 'Hold ORANGE center face squarely within the alignment grid.'
+    }
+];
 
 const triggerConfetti = () => {
-    const fire = () => window.confetti({ particleCount: 150, spread: 80, origin: { y: 0.6 }, zIndex: 9999, colors: [AMAZON_GREEN, BANANA_YELLOW, POMEGRANATE_RED, '#ffffff'] });
+    const fire = () => window.confetti({
+        particleCount: 120,
+        spread: 80,
+        origin: { y: 0.6 },
+        zIndex: 9999,
+        colors: [ORANGE_PRIMARY, '#FF8533', '#FFFFFF', '#0055D4']
+    });
     if (window.confetti) fire();
     else {
         const script = document.createElement('script');
@@ -46,7 +138,7 @@ const triggerConfetti = () => {
             osc.type = 'sine'; osc.frequency.value = freq;
             osc.connect(gain); gain.connect(ctx.destination);
             osc.start(startTime);
-            gain.gain.setValueAtTime(0.1, startTime);
+            gain.gain.setValueAtTime(0.08, startTime);
             gain.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
             osc.stop(startTime + duration);
         };
@@ -55,41 +147,66 @@ const triggerConfetti = () => {
         playNote(659.25, now + 0.15, 0.15);
         playNote(783.99, now + 0.3, 0.15);
         playNote(1046.50, now + 0.45, 0.4);
-    } catch(e) {}
+    } catch { /* ignore */ }
 };
 
 const FaceGrid = ({ faceObj, label }) => {
     const isScanned = !!faceObj;
-    const gridColors = faceObj ? faceObj.colors : Array(9).fill('#222');
+    const gridColors = faceObj ? faceObj.colors : Array(9).fill('#1A1E26');
     const hasWarning = faceObj && faceObj.hasWarning;
 
     return (
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', margin: '4px', opacity: isScanned ? 1 : 0.4, transition: 'all 0.4s' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', margin: '4px', opacity: isScanned ? 1 : 0.35, transition: 'all 0.3s' }}>
             <div style={{
-                display: 'grid', gridTemplateColumns: 'repeat(3, 18px)', gridTemplateRows: 'repeat(3, 18px)', gap: '2px', padding: '4px',
-                backgroundColor: '#111', borderRadius: '6px',
-                border: isScanned ? (hasWarning ? `2px solid ${POMEGRANATE_RED}` : `2px solid ${AMAZON_GREEN}`) : '2px solid #333',
-                boxShadow: isScanned ? (hasWarning ? `0 0 15px rgba(216, 43, 51, 0.6)` : `0 0 15px rgba(31, 166, 88, 0.4)`) : 'none'
+                display: 'grid', gridTemplateColumns: 'repeat(3, 19px)', gridTemplateRows: 'repeat(3, 19px)', gap: '2px', padding: '4px',
+                backgroundColor: '#08090C', borderRadius: '6px',
+                border: isScanned ? (hasWarning ? `1.5px solid ${RED_ACCENT}` : `1.5px solid ${ORANGE_PRIMARY}`) : '1px solid rgba(255, 255, 255, 0.10)'
             }}>
                 {gridColors.map((c, i) => <div key={i} style={{ backgroundColor: c, width: '100%', height: '100%', borderRadius: '2px' }} />)}
             </div>
-            <span style={{ fontSize: '11px', color: isScanned ? (hasWarning ? POMEGRANATE_RED : AMAZON_GREEN) : '#666', marginTop: '6px', fontWeight: '800', letterSpacing: '1px' }}>{label}</span>
-            {hasWarning && <span style={{ fontSize: '9px', color: POMEGRANATE_RED, marginTop: '2px', fontWeight: 'bold' }}>Mis-scanned?</span>}
+            <span style={{ fontSize: '11px', color: isScanned ? (hasWarning ? RED_ACCENT : ORANGE_PRIMARY) : TEXT_SECONDARY, marginTop: '6px', fontWeight: '700', letterSpacing: '0.5px' }}>{label}</span>
+            {hasWarning && <span style={{ fontSize: '9px', color: RED_ACCENT, marginTop: '2px', fontWeight: 'bold' }}>Check Face</span>}
         </div>
     );
 };
 
 const Scanner = () => {
-    const [activeView, setActiveView] = useState('main');
+    const [calibratedProfile, setCalibratedProfile] = useState(() => {
+        try {
+            const saved = localStorage.getItem('rubiks_solver_calibrated_profile');
+            return saved ? JSON.parse(saved) : null;
+        } catch {
+            return null;
+        }
+    });
 
-    const orbRefs = useRef([]);
+    const [activeView, setActiveView] = useState(() => {
+        try {
+            const saved = localStorage.getItem('rubiks_solver_calibrated_profile');
+            return saved ? 'main' : 'calibrate';
+        } catch {
+            return 'calibrate';
+        }
+    });
+
+    const [calibrationIndex, setCalibrationIndex] = useState(0);
+    const [calibratedSteps, setCalibratedSteps] = useState(() => {
+        try {
+            const saved = localStorage.getItem('rubiks_solver_calibrated_profile');
+            return saved ? JSON.parse(saved).mapping : {};
+        } catch {
+            return {};
+        }
+    });
+    const [calibrateWarning, setCalibrateWarning] = useState(null);
+    const [isCalibratingLoading, setIsCalibratingLoading] = useState(false);
+
     const [isTransitioning, setIsTransitioning] = useState(false);
-    const isWarpingRef = useRef(false);
 
     const mainVideoRef = useRef(null);
     const mainCanvasRef = useRef(null);
-    const pickerVideoRef = useRef(null);
-    const pickerCanvasRef = useRef(null);
+    const calibrateVideoRef = useRef(null);
+    const calibrateCanvasRef = useRef(null);
 
     const hasCelebrated = useRef(false);
     const processingRef = useRef(false);
@@ -102,120 +219,112 @@ const Scanner = () => {
     const [isAutoScanning, setIsAutoScanning] = useState(true);
     const [solveError, setSolveError] = useState(null);
 
+    // Cube presence & diagnostics
+    const [isCubePresent, setIsCubePresent] = useState(false);
+    const [presenceScore, setPresenceScore] = useState(0);
+    const [validCount, setValidCount] = useState(0);
+    const [diagnosticsData, setDiagnosticsData] = useState(null);
+    const [showDiagnostics, setShowDiagnostics] = useState(false);
+
     const [finalSolution, setFinalSolution] = useState(null);
     const [solutionMoves, setSolutionMoves] = useState([]);
     const [scrambledColors, setScrambledColors] = useState([]);
     const [isEasterEgg, setIsEasterEgg] = useState(false);
     const [isPlaying, setIsPlaying] = useState(false);
     const [currentMoveIndex, setCurrentMoveIndex] = useState(0);
-    const [tps, setTps] = useState(0.5);
+    const [tps, setTps] = useState(0.8);
 
-    const [pickerColors, setPickerColors] = useState([]);
-    const [pickerNames, setPickerNames] = useState(["", "", "", "", "", ""]);
-    const [prefFront, setPrefFront] = useState(null);
-    const [prefTop, setPrefTop] = useState(null);
-    const [customScheme, setCustomScheme] = useState(null);
-
-    useEffect(() => {
-        const baseDirections = [0, 45, 90, 135, 180, 225, 270, 315];
-        const orbsData = baseDirections.map(baseAngle => {
-            const angleDeg = baseAngle + (Math.random() - 0.5) * 20;
-            const rad = angleDeg * Math.PI / 180;
-            return {
-                x: window.innerWidth / 2, y: window.innerHeight / 2,
-                vx: Math.cos(rad), vy: Math.sin(rad),
-            };
-        });
-
-        let reqId;
-        const BASE_SPEED = 1.0;
-        const WARP_SPEED_MULTIPLIER = 5.0;
-
-        const updatePhysics = () => {
-            const size = window.innerWidth * 0.25;
-            const speed = isWarpingRef.current ? BASE_SPEED * WARP_SPEED_MULTIPLIER : BASE_SPEED;
-
-            orbsData.forEach((orb, i) => {
-                orb.x += orb.vx * speed;
-                orb.y += orb.vy * speed;
-                let bounced = false;
-
-                if (orb.x <= 0) { orb.x = 0; orb.vx *= -1; bounced = true; }
-                else if (orb.x >= window.innerWidth) { orb.x = window.innerWidth; orb.vx *= -1; bounced = true; }
-
-                if (orb.y <= 0) { orb.y = 0; orb.vy *= -1; bounced = true; }
-                else if (orb.y >= window.innerHeight) { orb.y = window.innerHeight; orb.vy *= -1; bounced = true; }
-
-                if (bounced) {
-                    let currentRad = Math.atan2(orb.vy, orb.vx);
-                    currentRad += (Math.random() - 0.5) * (30 * Math.PI / 180);
-                    orb.vx = Math.cos(currentRad);
-                    orb.vy = Math.sin(currentRad);
-                }
-
-                if (orbRefs.current[i]) {
-                    const offsetX = orb.x - (size / 2);
-                    const offsetY = orb.y - (size / 2);
-                    orbRefs.current[i].style.transform = `translate(${offsetX}px, ${offsetY}px)`;
-                }
-            });
-            reqId = requestAnimationFrame(updatePhysics);
-        };
-        reqId = requestAnimationFrame(updatePhysics);
-        return () => cancelAnimationFrame(reqId);
-    }, []);
-
-    useEffect(() => {
+    const changeView = (newView) => {
         setIsTransitioning(true);
-        isWarpingRef.current = true;
-        const timer = setTimeout(() => {
+        setActiveView(newView);
+        setTimeout(() => {
             setIsTransitioning(false);
-            isWarpingRef.current = false;
         }, 800);
-        return () => clearTimeout(timer);
-    }, [activeView]);
+    };
 
     useEffect(() => {
-        axios.post('http://localhost:8000/reset');
+        axios.post(`${API_BASE_URL}/reset`).catch(() => { /* ignore */ });
+        let activeStream = null;
         navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment", width: 1280, height: 720 } })
             .then(stream => {
+                activeStream = stream;
                 if (mainVideoRef.current) mainVideoRef.current.srcObject = stream;
-                if (pickerVideoRef.current) pickerVideoRef.current.srcObject = stream;
+                if (calibrateVideoRef.current) calibrateVideoRef.current.srcObject = stream;
             })
             .catch(err => console.error("Camera failed", err));
-    }, []);
 
-    // --- TIMING UPDATE --- 100ms interval
-    useEffect(() => {
-        const interval = setInterval(runAutoScanTick, 100);
-        return () => clearInterval(interval);
-    }, [activeView, customScheme, finalSolution, isAutoScanning]);
-
-    useEffect(() => {
-        const savedScheme = localStorage.getItem('rubiks_solver_custom_scheme');
-        if (savedScheme) {
-            try { setCustomScheme({ mapping: JSON.parse(savedScheme) }); } catch (e) { }
-        }
+        return () => {
+            if (activeStream) {
+                activeStream.getTracks().forEach(track => track.stop());
+            }
+        };
     }, []);
 
     const playSuccessSound = () => {
         const audio = new Audio('https://actions.google.com/sounds/v1/alarms/beep_short.ogg');
-        audio.play().catch(e => {});
+        audio.play().catch(() => { /* ignore */ });
     };
 
-    const resetForNewCube = () => {
-        setFinalSolution(null);
-        setSolutionMoves([]);
-        setIsEasterEgg(false);
-        hasCelebrated.current = false;
-        setCurrentMoveIndex(0);
-        setFaceData({ up: null, left: null, front: null, right: null, back: null, down: null });
-        setScanProgress(0);
-        setSolveError(null);
-        setIsAutoScanning(true);
-        setDetectedFace("Searching...");
-        setActiveView('main');
-        axios.post('http://localhost:8000/reset');
+    const solve = async () => {
+        try {
+            const payload = {};
+            if (calibratedProfile?.mapping) {
+                payload.custom_palette = Object.values(calibratedProfile.mapping);
+            }
+
+            const res = await axios.post(`${API_BASE_URL}/solve-global`, payload);
+            const sol = res.data.solution;
+            setFinalSolution(sol);
+            setSolveError(null);
+
+            const colorsFor3D = res.data.parsed_colors.map(face => {
+                if (calibratedProfile && calibratedProfile.mapping[face]) {
+                    const rgb = calibratedProfile.mapping[face].rgb;
+                    return `rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})`;
+                }
+                const standardMap = { 'up': 'white', 'down': 'yellow', 'front': 'green', 'back': 'blue', 'right': 'red', 'left': 'orange' };
+                return standardMap[face];
+            });
+            setScrambledColors(colorsFor3D);
+
+            if (sol.startsWith("Good news")) { setIsEasterEgg(true); setSolutionMoves([]); }
+            else { setIsEasterEgg(false); setSolutionMoves(sol.split(' ')); }
+
+            changeView('solution');
+
+        } catch (err) {
+            setSolveError(err.response?.data?.detail || "An unknown solver error occurred.");
+            setIsAutoScanning(true);
+        }
+    };
+
+    const commitScan = async (faceName) => {
+        try {
+            const payload = { image: mainCanvasRef.current.toDataURL('image/jpeg'), face_name: faceName, preview: false, picker_mode: false };
+            if (calibratedProfile?.mapping) {
+                payload.custom_palette = Object.values(calibratedProfile.mapping);
+            }
+
+            const res = await axios.post(`${API_BASE_URL}/scan-raw`, payload);
+            if (res.data.success) {
+                playSuccessSound();
+                setSolveError(null);
+                const cssColors = res.data.rgb_preview.map(c => `rgb(${c[0]}, ${c[1]}, ${c[2]})`);
+                setFaceData(prev => ({ ...prev, [faceName]: { colors: cssColors, hasWarning: false } }));
+
+                if (res.data.scanned_count === 6) {
+                    setIsAutoScanning(false);
+                    solve();
+                } else {
+                    setIsAutoScanning(false);
+                    // 1.0 Second Cooldown after successful face scan
+                    setTimeout(() => {
+                        setScanProgress(0);
+                        setIsAutoScanning(true);
+                    }, 1000);
+                }
+            }
+        } catch { /* ignore */ }
     };
 
     const runAutoScanTick = async () => {
@@ -228,83 +337,100 @@ const Scanner = () => {
 
         try {
             const payload = { image: mainCanvasRef.current.toDataURL('image/jpeg'), face_name: "auto", preview: true, picker_mode: false };
-            if (customScheme) payload.custom_palette = Object.values(customScheme.mapping);
+            if (calibratedProfile?.mapping) {
+                payload.custom_palette = Object.values(calibratedProfile.mapping);
+            }
 
-            const res = await axios.post('http://localhost:8000/scan-raw', payload);
+            const res = await axios.post(`${API_BASE_URL}/scan-raw`, payload);
+
+            const cubePresent = !!res.data.cube_present;
+            const currentValidCount = res.data.valid_count || 0;
+            setIsCubePresent(cubePresent);
+            setPresenceScore(res.data.presence_score || 0);
+            setValidCount(currentValidCount);
+
+            if (res.data.diagnostics) {
+                setDiagnosticsData(res.data.diagnostics);
+            }
+
+            // Gating 1: Cube Presence Gatekeeper
+            if (!cubePresent) {
+                stabilityCounter.current = 0;
+                setScanProgress(0);
+                setDetectedFace("Align cube squarely in grid");
+                processingRef.current = false;
+                return;
+            }
+
+            // Gating 2: Strict 9-Sticker Gating (auto-scan only begins when ALL 9 stickers are valid)
+            if (!res.data.success || currentValidCount < 9) {
+                stabilityCounter.current = 0;
+                setScanProgress(0);
+                setDetectedFace(res.data.message || `Aligning Face (${currentValidCount}/9 valid)`);
+                processingRef.current = false;
+                return;
+            }
 
             if (res.data.success && res.data.face_name !== "unknown") {
                 const currentFaceName = res.data.face_name;
-                setDetectedFace(currentFaceName.toUpperCase());
-                if (currentFaceName === lastFaceRef.current) stabilityCounter.current += 1;
-                else { stabilityCounter.current = 0; setScanProgress(0); }
+                const displayName = calibratedProfile?.mapping[currentFaceName]?.displayName || currentFaceName.toUpperCase();
+                setDetectedFace(`${currentFaceName.toUpperCase()} (${displayName})`);
+
+                if (currentFaceName === lastFaceRef.current) {
+                    stabilityCounter.current += 1;
+                } else {
+                    stabilityCounter.current = 0;
+                    setScanProgress(0);
+                }
                 lastFaceRef.current = currentFaceName;
 
-                // 10 Ticks * 100ms = Exactly 1.0 Seconds to scan
+                // 10 Ticks * 100ms = Exactly 1.0 Second hold
                 const TARGET_TICKS = 10;
                 setScanProgress(Math.min((stabilityCounter.current / TARGET_TICKS) * 100, 100));
 
                 if (stabilityCounter.current >= TARGET_TICKS) {
                     await commitScan(currentFaceName);
-                    stabilityCounter.current = 0; setScanProgress(0);
+                    stabilityCounter.current = 0;
+                    setScanProgress(0);
                 }
             } else {
-                stabilityCounter.current = 0; setScanProgress(0);
+                stabilityCounter.current = 0;
+                setScanProgress(0);
                 setDetectedFace(res.data.message || "Searching...");
             }
-        } catch (err) {}
+        } catch { /* ignore */ }
         processingRef.current = false;
     };
 
-    const commitScan = async (faceName) => {
-        try {
-            const payload = { image: mainCanvasRef.current.toDataURL('image/jpeg'), face_name: faceName, preview: false, picker_mode: false };
-            if (customScheme) payload.custom_palette = Object.values(customScheme.mapping);
+    const runAutoScanTickRef = useRef(runAutoScanTick);
+    useEffect(() => {
+        runAutoScanTickRef.current = runAutoScanTick;
+    });
 
-            const res = await axios.post('http://localhost:8000/scan-raw', payload);
-            if (res.data.success) {
-                playSuccessSound();
-                setSolveError(null);
-                const cssColors = res.data.rgb_preview.map(c => `rgb(${c[0]}, ${c[1]}, ${c[2]})`);
-                setFaceData(prev => ({ ...prev, [faceName]: { colors: cssColors, hasWarning: res.data.has_warnings } }));
-
-                if (res.data.scanned_count === 6) {
-                    setIsAutoScanning(false);
-                    solve();
-                } else {
-                    setIsAutoScanning(false);
-                    // Exactly 1.0 Second Cooldown
-                    setTimeout(() => {
-                        setScanProgress(0);
-                        setIsAutoScanning(true);
-                    }, 1000);
-                }
+    useEffect(() => {
+        const interval = setInterval(() => {
+            if (runAutoScanTickRef.current) {
+                runAutoScanTickRef.current();
             }
-        } catch (err) {}
-    };
+        }, 100);
+        return () => clearInterval(interval);
+    }, []);
 
-    const solve = async () => {
-        try {
-            const res = await axios.post('http://localhost:8000/solve-global');
-            const sol = res.data.solution;
-            setFinalSolution(sol);
-            setSolveError(null);
-
-            const colorsFor3D = res.data.parsed_colors.map(face => {
-                if (customScheme) return `rgb(${customScheme.mapping[face].rgb[0]}, ${customScheme.mapping[face].rgb[1]}, ${customScheme.mapping[face].rgb[2]})`;
-                const standardMap = { 'up': 'white', 'down': 'yellow', 'front': 'green', 'back': 'blue', 'right': 'red', 'left': 'orange' };
-                return standardMap[face];
-            });
-            setScrambledColors(colorsFor3D);
-
-            if (sol.startsWith("Good news")) { setIsEasterEgg(true); setSolutionMoves([]); }
-            else { setIsEasterEgg(false); setSolutionMoves(sol.split(' ')); }
-
-            setActiveView('solution');
-
-        } catch (err) {
-            setSolveError(err.response?.data?.detail || "An unknown solver error occurred.");
-            setIsAutoScanning(true);
-        }
+    const resetForNewCube = () => {
+        setFinalSolution(null);
+        setSolutionMoves([]);
+        setIsEasterEgg(false);
+        hasCelebrated.current = false;
+        setCurrentMoveIndex(0);
+        setFaceData({ up: null, left: null, front: null, right: null, back: null, down: null });
+        setScanProgress(0);
+        setSolveError(null);
+        setIsAutoScanning(true);
+        setDetectedFace("Searching...");
+        setIsCubePresent(false);
+        setValidCount(0);
+        changeView('main');
+        axios.post(`${API_BASE_URL}/reset`).catch(() => { /* ignore */ });
     };
 
     const handleMoveComplete = () => {
@@ -316,213 +442,422 @@ const Scanner = () => {
         else setIsPlaying(false);
     };
 
-    const scanPickerCenter = async () => {
-        if (!pickerVideoRef.current) return;
-        const context = pickerCanvasRef.current.getContext('2d');
-        pickerCanvasRef.current.width = pickerVideoRef.current.videoWidth;
-        pickerCanvasRef.current.height = pickerVideoRef.current.videoHeight;
-        context.drawImage(pickerVideoRef.current, 0, 0);
+    // Calibration wizard capture
+    const captureCalibrationStep = async () => {
+        if (!calibrateVideoRef.current || !calibrateVideoRef.current.videoWidth || isCalibratingLoading) return;
+        setIsCalibratingLoading(true);
+        setCalibrateWarning(null);
+
+        const context = calibrateCanvasRef.current.getContext('2d');
+        calibrateCanvasRef.current.width = calibrateVideoRef.current.videoWidth;
+        calibrateCanvasRef.current.height = calibrateVideoRef.current.videoHeight;
+        context.drawImage(calibrateVideoRef.current, 0, 0);
 
         try {
-            const res = await axios.post('http://localhost:8000/scan-raw', {
-                image: pickerCanvasRef.current.toDataURL('image/jpeg'), face_name: "auto", preview: true, picker_mode: true
+            const res = await axios.post(`${API_BASE_URL}/calibrate-face`, {
+                image: calibrateCanvasRef.current.toDataURL('image/jpeg')
             });
-            if (res.data.raw_features) {
-                setPickerColors(prev => [...prev, res.data.raw_features[4]]);
-                playSuccessSound();
+
+            if (!res.data.is_cube_present) {
+                setCalibrateWarning("Cube not detected in grid! Align your cube squarely.");
+                setIsCalibratingLoading(false);
+                return;
             }
-        } catch (err) { }
-    };
 
-    const handleNameChange = (index, value) => {
-        const newNames = [...pickerNames];
-        newNames[index] = formatColorName(value);
-        setPickerNames(newNames);
-    };
+            const step = CALIBRATION_STEPS[calibrationIndex];
+            const center = res.data.center;
+            const updated = {
+                ...calibratedSteps,
+                [step.key]: {
+                    face: step.key,
+                    name: step.colorName,
+                    displayName: step.name,
+                    rgb: center.rgb,
+                    lab: center.lab,
+                    hsv: center.hsv
+                }
+            };
 
-    const applyCustomScheme = () => {
-        const opposites = {0:2, 1:3, 2:0, 3:1, 4:5, 5:4};
-        const u = prefTop; const f = prefFront;
-        const getRightIdx = (f, u) => {
-            if (u === 4) return {0:1, 1:2, 2:3, 3:0}[f]; if (u === 5) return {0:3, 1:0, 2:1, 3:2}[f];
-            if (u === 0) return {4:1, 1:5, 5:3, 3:4}[f]; if (u === 2) return {4:3, 3:5, 5:1, 1:4}[f];
-            if (u === 1) return {4:2, 2:5, 5:0, 0:4}[f]; if (u === 3) return {4:0, 0:5, 5:2, 2:4}[f]; return -1;
+            setCalibratedSteps(updated);
+            playSuccessSound();
+
+            if (calibrationIndex < CALIBRATION_STEPS.length - 1) {
+                setCalibrationIndex(prev => prev + 1);
+            } else {
+                // All 6 faces calibrated! Save profile as Ground Truth
+                const profile = { mapping: updated };
+                setCalibratedProfile(profile);
+                localStorage.setItem('rubiks_solver_calibrated_profile', JSON.stringify(profile));
+                resetForNewCube();
+                changeView('main');
+            }
+        } catch (err) {
+            setCalibrateWarning(err.response?.data?.detail || "Capture failed. Check lighting and alignment.");
         }
-        const r = getRightIdx(f, u);
-        const mapping = {
-            'up': { ...pickerColors[u], name: pickerNames[u] || `Color ${u+1}`, face: 'up' },
-            'front': { ...pickerColors[f], name: pickerNames[f] || `Color ${f+1}`, face: 'front' },
-            'right': { ...pickerColors[r], name: pickerNames[r] || `Color ${r+1}`, face: 'right' },
-            'down': { ...pickerColors[opposites[u]], name: pickerNames[opposites[u]] || `Color ${opposites[u]+1}`, face: 'down' },
-            'back': { ...pickerColors[opposites[f]], name: pickerNames[opposites[f]] || `Color ${opposites[f]+1}`, face: 'back' },
-            'left': { ...pickerColors[opposites[r]], name: pickerNames[opposites[r]] || `Color ${opposites[r]+1}`, face: 'left' }
-        };
-        setCustomScheme({ mapping });
-        localStorage.setItem('rubiks_solver_custom_scheme', JSON.stringify(mapping));
-        setActiveView('main');
-        resetForNewCube();
+        setIsCalibratingLoading(false);
+    };
+
+    const finishCalibrationManually = () => {
+        if (Object.keys(calibratedSteps).length === 6) {
+            const profile = { mapping: calibratedSteps };
+            setCalibratedProfile(profile);
+            localStorage.setItem('rubiks_solver_calibrated_profile', JSON.stringify(profile));
+            resetForNewCube();
+            changeView('main');
+        }
     };
 
     let translatePos = '-100vw';
-    if (activeView === 'picker') translatePos = '0vw';
+    if (activeView === 'calibrate') translatePos = '0vw';
     if (activeView === 'solution') translatePos = '-200vw';
 
-    const opposites = {0:2, 1:3, 2:0, 3:1, 4:5, 5:4};
-    const isAdjacent = prefFront !== null && prefTop !== null && prefFront !== prefTop && opposites[prefFront] !== prefTop;
-
-    const cinematicTransition = 'transform 0.8s cubic-bezier(0.64, 0, 0.36, 1)';
-    const bgOpacity = isTransitioning ? 0.6 : 0.2;
-    const bgScale = isTransitioning ? 'scale(1.2)' : 'scale(1)';
-    const glowTransition = 'all 0.8s cubic-bezier(0.25, 1, 0.5, 1)';
-
-    const ORB_COLORS = [
-        { rgb: '31,166,88' },
-        { rgb: '216,43,51' },
-        { rgb: '252,209,42' },
-        { rgb: '31,166,88' },
-        { rgb: '216,43,51' },
-        { rgb: '252,209,42' },
-        { rgb: '31,166,88' },
-        { rgb: '216,43,51' }
-    ];
+    const currentStep = CALIBRATION_STEPS[calibrationIndex] || CALIBRATION_STEPS[0];
+    const isCurrentStepDone = !!calibratedSteps[currentStep.key];
+    const calibratedCount = Object.keys(calibratedSteps).length;
+    const cinematicTransition = 'transform 0.75s cubic-bezier(0.64, 0, 0.36, 1)';
 
     return (
         <>
-            <style>{`
-                html, body { margin: 0; padding: 0; width: 100%; height: 100%; background-color: ${SPACE_GRAY}; overflow: hidden; }
-            `}</style>
+            <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', overflow: 'hidden', background: SPACE_BLACK, color: TEXT_PRIMARY }}>
 
-            <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', overflow: 'hidden', background: SPACE_GRAY, fontFamily: MODERN_FONT, color: 'white' }}>
-
-                <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', zIndex: 0, pointerEvents: 'none' }}>
-                    {ORB_COLORS.map((orb, i) => (
-                        <div key={i} ref={el => orbRefs.current[i] = el} style={{ position: 'absolute', top: 0, left: 0, width: '25vw', height: '25vw', willChange: 'transform' }}>
-                            <div style={{ width: '100%', height: '100%', background: `radial-gradient(circle, rgba(${orb.rgb},1) 0%, rgba(${orb.rgb},0) 65%)`, filter: 'blur(90px)', opacity: bgOpacity, transform: bgScale, transition: glowTransition }} />
-                        </div>
-                    ))}
-                </div>
+                {/* Interactive Dot Matrix Canvas Background */}
+                <DotMatrixBackground isTransitioning={isTransitioning} />
 
                 <div style={{ position: 'relative', zIndex: 1, display: 'flex', width: '300vw', height: '100vh', transform: `translateX(${translatePos})`, transition: cinematicTransition }}>
 
-                    {/* ================= STAGE 1: COLOR SCHEME PICKER ================= */}
-                    <div style={{ width: '100vw', height: '100vh', padding: '20px', boxSizing: 'border-box', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '30px', position: 'relative' }}>
+                    {/* ================= STAGE 1: CALIBRATE CUBE ================= */}
+                    <div style={{ width: '100vw', height: '100vh', padding: '24px', boxSizing: 'border-box', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '32px', position: 'relative' }}>
 
-                        <div style={{ position: 'absolute', top: '30px', right: '30px', zIndex: 10 }}>
-                            <button onClick={() => setActiveView('main')} style={btnStyle}>MAIN SCANNER →</button>
+                        <div style={{ position: 'absolute', top: '28px', right: '32px', zIndex: 10 }}>
+                            <button onClick={() => changeView('main')} style={btnStyle}>
+                                {calibratedCount === 6 ? 'MAIN SCANNER →' : 'SKIP TO SCANNER →'}
+                            </button>
                         </div>
 
-                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', background: PANEL_BG, padding: '25px', borderRadius: '15px', border: '1px solid #1f2533', boxShadow: '0 20px 50px rgba(0,0,0,0.8), 0 0 30px rgba(31, 166, 88, 0.05)' }}>
-                            <h1 style={{ color: '#FFF', marginBottom: '15px', fontSize: '1.8rem', marginTop: 0, fontWeight: '800', textShadow: `0 0 10px ${AMAZON_GREEN}` }}>Color Scheme Picker</h1>
-
-                            <div style={{ position: 'relative', width: '100%', maxWidth: '700px', aspectRatio: '16/9', backgroundColor: '#000', borderRadius: '10px', border: `4px solid ${BANANA_YELLOW}`, boxShadow: `0 0 20px rgba(252, 209, 42, 0.5)`, overflow: 'hidden' }}>
-                                <video ref={pickerVideoRef} autoPlay playsInline muted style={{ width: '100%', height: '100%', objectFit: 'cover', transform: 'scaleX(-1)' }} />
-                                <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', height: '26.66%', aspectRatio: '1/1', border: `3px solid ${BANANA_YELLOW}`, borderRadius: '50%', boxShadow: '0 0 10px rgba(0,0,0,0.5)' }} />
+                        <div style={{
+                            display: 'flex', flexDirection: 'column', alignItems: 'center', background: PANEL_BG,
+                            padding: '28px', borderRadius: '16px', border: '1px solid rgba(255, 255, 255, 0.12)',
+                            boxShadow: '0 24px 60px rgba(0, 0, 0, 0.8)', maxWidth: '720px', width: '100%'
+                        }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
+                                <span style={{ fontSize: '20px' }}>🎯</span>
+                                <h1 style={{ color: TEXT_PRIMARY, margin: 0, fontSize: '1.9rem', fontWeight: '800' }}>Calibrate Cube</h1>
                             </div>
+                            <p style={{ color: TEXT_SECONDARY, margin: '0 0 16px 0', fontSize: '14px', textAlign: 'center' }}>
+                                Samples your cube's actual physical stickers to completely overwrite defaults for perfect recognition.
+                            </p>
 
-                            <canvas ref={pickerCanvasRef} style={{ display: 'none' }} />
-                            <div style={{marginTop: '20px', display: 'flex', gap: '10px', width: '100%'}}>
-                                <button onClick={scanPickerCenter} disabled={pickerColors.length >= 6} style={{...btnStyle, flex: 2}}>SCAN SIDE</button>
-                                <button onClick={() => setPickerColors(prev => prev.slice(0, -1))} disabled={pickerColors.length === 0} style={{...redBtnStyle, flex: 1}}>UNDO</button>
-                            </div>
-                        </div>
+                            <div style={{
+                                position: 'relative', width: '100%', maxWidth: '620px', aspectRatio: '16/9',
+                                backgroundColor: '#000', borderRadius: '10px', border: `2px solid ${currentStep.colorHex}`,
+                                overflow: 'hidden'
+                            }}>
+                                <video ref={calibrateVideoRef} autoPlay playsInline muted style={{ width: '100%', height: '100%', objectFit: 'cover', transform: 'scaleX(-1)' }} />
 
-                        <div style={{ background: PANEL_BG, padding: '25px', borderRadius: '15px', display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: '320px', border: '1px solid #1f2533', boxShadow: '0 20px 50px rgba(0,0,0,0.8)' }}>
-                            {pickerColors.length < 6 ? (
-                                <div style={{color: '#9aa0a6', lineHeight: '1.5', width: '100%'}}>
-                                    <h3 style={{marginTop:0, color:'white', marginBottom:'10px', fontSize:'16px', fontWeight:'800'}}>Instructions</h3>
-                                    <div style={{ background: '#181b21', padding: '15px', borderRadius: '10px', borderLeft: `4px solid ${BANANA_YELLOW}` }}>
-                                        {pickerColors.length === 0 && <p style={{margin:0}}>1. Scan <b style={{color:'white'}}>any side</b> of the cube.</p>}
-                                        {pickerColors.length > 0 && pickerColors.length < 4 && <p style={{margin:0}}>{pickerColors.length + 1}. Rotate the cube <b style={{color:'white'}}>clockwise</b> and scan the next side.</p>}
-                                        {pickerColors.length === 4 && <p style={{margin:0}}>5. Look at the <b style={{color:'white'}}>TOP</b> side relative to your last scan.</p>}
-                                        {pickerColors.length === 5 && <p style={{margin:0}}>6. Look at the <b style={{color:'white'}}>BOTTOM</b> side relative to your last scan.</p>}
-                                    </div>
-
-                                    <div style={{marginTop: '15px', display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
-                                        <span style={{fontSize: '16px', fontWeight: 'bold', color: '#FFF'}}>Progress:</span>
-                                        <span style={{fontSize: '16px', fontWeight: 'bold', color: BANANA_YELLOW, textShadow: `0 0 8px ${BANANA_YELLOW}`}}>{pickerColors.length} / 6</span>
-                                    </div>
-                                    {pickerColors.length > 0 && (
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '10px', width: '100%', background: '#0a0c10', padding: '10px', borderRadius: '8px', border: '1px solid #222' }}>
-                                            {pickerColors.map((c, i) => (
-                                                <div key={i} style={{ height: '20px', width: '100%', background: `rgb(${c.rgb[0]},${c.rgb[1]},${c.rgb[2]})`, borderRadius: '4px', boxShadow: `0 0 6px rgb(${c.rgb[0]},${c.rgb[1]},${c.rgb[2]})` }} />
-                                            ))}
+                                {/* 3x3 alignment grid */}
+                                <div style={{
+                                    position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)',
+                                    height: '80%', aspectRatio: '1/1', border: `2px dashed ${currentStep.colorHex}`,
+                                    borderRadius: '8px', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gridTemplateRows: 'repeat(3, 1fr)',
+                                    pointerEvents: 'none'
+                                }}>
+                                    {[...Array(9)].map((_, i) => (
+                                        <div key={i} style={{
+                                            border: '1px solid rgba(255,255,255,0.18)',
+                                            display: 'flex', alignItems: 'center', justifyContent: 'center'
+                                        }}>
+                                            {i === 4 && (
+                                                <div style={{
+                                                    width: '50%', height: '50%', borderRadius: '50%',
+                                                    border: `2px solid ${currentStep.colorHex}`,
+                                                    background: `${currentStep.colorHex}33`
+                                                }} />
+                                            )}
                                         </div>
-                                    )}
+                                    ))}
                                 </div>
-                            ) : (
-                                <div style={{width: '100%'}}>
-                                    <p style={{color: AMAZON_GREEN, fontWeight: '800', marginBottom: '15px', fontSize: '15px', textShadow: `0 0 5px ${AMAZON_GREEN}`}}>Name colors & pick orientation:</p>
-                                    <div style={{display: 'flex', flexDirection: 'column', gap: '10px'}}>
-                                        {pickerColors.map((c, i) => (
-                                            <div key={i} style={{display: 'flex', alignItems: 'center', gap: '8px'}}>
-                                                <div style={{width: '24px', height: '24px', background: `rgb(${c.rgb[0]},${c.rgb[1]},${c.rgb[2]})`, borderRadius: '6px', border: '2px solid #555', boxShadow: `0 0 6px rgb(${c.rgb[0]},${c.rgb[1]},${c.rgb[2]})`}} />
-                                                <input value={pickerNames[i]} onChange={(e) => handleNameChange(i, e.target.value)} placeholder={`Color ${i+1}`} style={{width: '100px', padding: '6px', background: '#0a0c10', color: 'white', border: '1px solid #333', borderRadius: '4px', outline: 'none'}} />
-                                                <button onClick={() => setPrefFront(i)} style={{padding: '6px', background: prefFront === i ? AMAZON_GREEN : '#222', color: prefFront === i ? '#000' : '#888', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', transition: 'all 0.2s', boxShadow: prefFront === i ? `0 0 10px ${AMAZON_GREEN}` : 'none'}}>Front</button>
-                                                <button onClick={() => setPrefTop(i)} style={{padding: '6px', background: prefTop === i ? AMAZON_GREEN : '#222', color: prefTop === i ? '#000' : '#888', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', transition: 'all 0.2s', boxShadow: prefTop === i ? `0 0 10px ${AMAZON_GREEN}` : 'none'}}>Top</button>
+                            </div>
+
+                            <canvas ref={calibrateCanvasRef} style={{ display: 'none' }} />
+
+                            {calibrateWarning && (
+                                <div style={{
+                                    marginTop: '12px', padding: '10px 16px', background: 'rgba(239, 68, 68, 0.12)',
+                                    color: RED_ACCENT, border: `1px solid ${RED_ACCENT}`, borderRadius: '8px',
+                                    fontWeight: '700', fontSize: '13px', textAlign: 'center', width: '100%', boxSizing: 'border-box'
+                                }}>
+                                    {calibrateWarning}
+                                </div>
+                            )}
+
+                            <div style={{ marginTop: '16px', display: 'flex', gap: '12px', width: '100%', maxWidth: '620px' }}>
+                                <button
+                                    onClick={captureCalibrationStep}
+                                    disabled={isCalibratingLoading}
+                                    style={{
+                                        ...btnStyle, flex: 2, padding: '14px', fontSize: '14px',
+                                        background: isCalibratingLoading ? '#222' : 'rgba(255, 107, 0, 0.14)'
+                                    }}
+                                >
+                                    {isCalibratingLoading ? 'SAMPLING...' : (isCurrentStepDone ? `📸 RE-CAPTURE ${currentStep.name.toUpperCase()} FACE` : `📸 CAPTURE ${currentStep.name.toUpperCase()} FACE`)}
+                                </button>
+                                {calibrationIndex > 0 && (
+                                    <button
+                                        onClick={() => setCalibrationIndex(prev => prev - 1)}
+                                        style={{ ...neutralBtnStyle, flex: 1, padding: '14px' }}
+                                    >
+                                        ← PREVIOUS
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Calibration Stepper & Guidelines Card */}
+                        <div style={{
+                            background: PANEL_BG, padding: '26px', borderRadius: '16px', display: 'flex',
+                            flexDirection: 'column', minWidth: '330px', maxWidth: '370px',
+                            border: '1px solid rgba(255, 255, 255, 0.12)', boxShadow: '0 24px 60px rgba(0,0,0,0.8)'
+                        }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                                <span style={{ fontSize: '15px', fontWeight: '800', color: TEXT_PRIMARY }}>Calibration Steps</span>
+                                <span style={{ fontSize: '13px', fontWeight: '700', color: ORANGE_PRIMARY }}>{calibratedCount} / 6 Complete</span>
+                            </div>
+
+                            {/* 6 Step badges */}
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '18px' }}>
+                                {CALIBRATION_STEPS.map((step, idx) => {
+                                    const isDone = !!calibratedSteps[step.key];
+                                    const isCurrent = idx === calibrationIndex;
+                                    const saved = calibratedSteps[step.key];
+
+                                    return (
+                                        <div
+                                            key={step.key}
+                                            onClick={() => setCalibrationIndex(idx)}
+                                            style={{
+                                                display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 14px',
+                                                borderRadius: '8px', cursor: 'pointer',
+                                                background: isCurrent ? 'rgba(255, 107, 0, 0.08)' : (isDone ? 'rgba(255, 255, 255, 0.03)' : '#08090C'),
+                                                border: isCurrent ? `1.5px solid ${ORANGE_PRIMARY}` : (isDone ? '1px solid rgba(255, 255, 255, 0.16)' : '1px solid rgba(255, 255, 255, 0.06)'),
+                                                transition: 'all 0.2s ease'
+                                            }}
+                                        >
+                                            <div style={{
+                                                width: '26px', height: '26px', borderRadius: '6px',
+                                                background: saved ? `rgb(${saved.rgb.join(',')})` : step.colorHex,
+                                                border: '1px solid rgba(255,255,255,0.25)',
+                                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                                fontWeight: '800', fontSize: '12px', color: step.textHex
+                                            }}>
+                                                {isDone ? '✓' : idx + 1}
                                             </div>
-                                        ))}
-                                    </div>
-                                    {!isAdjacent && prefFront !== null && prefTop !== null && ( <p style={{color: POMEGRANATE_RED, fontSize: '12px', marginTop: '10px', fontWeight: 'bold', textShadow: `0 0 5px ${POMEGRANATE_RED}`}}>Front and Top must be adjacent!</p> )}
-                                    <button onClick={applyCustomScheme} disabled={!isAdjacent} style={{...btnStyle, width: '100%', marginTop: '20px', opacity: isAdjacent ? 1 : 0.2}}>APPLY SCHEME</button>
+                                            <div style={{ flex: 1 }}>
+                                                <div style={{ fontWeight: '700', fontSize: '13px', color: isCurrent ? ORANGE_PRIMARY : (isDone ? TEXT_PRIMARY : TEXT_SECONDARY) }}>
+                                                    {step.name} <span style={{ fontSize: '11px', color: '#6E7687' }}>({step.badge})</span>
+                                                </div>
+                                                {saved && (
+                                                    <div style={{ fontSize: '10px', color: '#8A92A4', fontFamily: 'monospace' }}>
+                                                        RGB: [{saved.rgb.join(', ')}]
+                                                    </div>
+                                                )}
+                                            </div>
+                                            {isDone && <span style={{ color: ORANGE_PRIMARY, fontSize: '12px', fontWeight: '700' }}>Saved</span>}
+                                        </div>
+                                    );
+                                })}
+                            </div>
+
+                            {/* Current Step Instruction Box */}
+                            <div style={{ background: CARD_BG, padding: '14px', borderRadius: '10px', borderLeft: `3px solid ${currentStep.colorHex}` }}>
+                                <div style={{ fontSize: '13px', fontWeight: '800', color: TEXT_PRIMARY, marginBottom: '6px' }}>
+                                    Step {calibrationIndex + 1}: {currentStep.name} ({currentStep.badge})
                                 </div>
+                                <p style={{ margin: 0, fontSize: '12px', color: TEXT_SECONDARY, lineHeight: '1.5' }}>
+                                    {currentStep.desc}
+                                </p>
+                            </div>
+
+                            {calibratedCount === 6 && (
+                                <button
+                                    onClick={finishCalibrationManually}
+                                    style={{ ...btnStyle, marginTop: '16px', width: '100%', background: 'rgba(255, 107, 0, 0.16)' }}
+                                >
+                                    SAVE & START SOLVING →
+                                </button>
                             )}
                         </div>
                     </div>
 
                     {/* ================= STAGE 2: MAIN SCANNER ================= */}
-                    <div style={{ width: '100vw', height: '100vh', padding: '20px', boxSizing: 'border-box', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '30px', position: 'relative' }}>
+                    <div style={{ width: '100vw', height: '100vh', padding: '24px', boxSizing: 'border-box', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '32px', position: 'relative' }}>
 
-                        <div style={{position: 'absolute', top: '30px', left: '30px', display: 'flex', flexDirection: 'column', gap: '10px', zIndex: 10}}>
-                            <button onClick={() => { setPickerColors([]); setPickerNames(["", "", "", "", "", ""]); setPrefFront(null); setPrefTop(null); setActiveView('picker'); }} style={btnStyle}>← Color Scheme Picker</button>
-                            {customScheme && (
-                                <button onClick={() => { setCustomScheme(null); localStorage.removeItem('rubiks_solver_custom_scheme'); resetForNewCube(); }} style={redBtnStyle}>Revert Colors</button>
+                        {/* Top Left Toolbar */}
+                        <div style={{ position: 'absolute', top: '28px', left: '32px', display: 'flex', flexDirection: 'column', gap: '10px', zIndex: 10 }}>
+                            <button
+                                onClick={() => { setCalibrationIndex(0); changeView('calibrate'); }}
+                                style={btnStyle}
+                            >
+                                🎯 Recalibrate Cube
+                            </button>
+                            {calibratedProfile && (
+                                <button
+                                    onClick={() => {
+                                        setCalibratedProfile(null);
+                                        localStorage.removeItem('rubiks_solver_calibrated_profile');
+                                        resetForNewCube();
+                                    }}
+                                    style={redBtnStyle}
+                                >
+                                    ↺ Revert to Defaults
+                                </button>
                             )}
+                            <button
+                                onClick={() => setShowDiagnostics(prev => !prev)}
+                                style={neutralBtnStyle}
+                            >
+                                {showDiagnostics ? 'Hide Diagnostics' : '🔍 Diagnostics'}
+                            </button>
                         </div>
 
-                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', background: PANEL_BG, padding: '25px', borderRadius: '15px', border: '1px solid #1f2533', boxShadow: '0 20px 50px rgba(0,0,0,0.8), 0 0 40px rgba(31, 166, 88, 0.03)' }}>
-                            <h1 style={{ color: '#FFF', marginBottom: '10px', fontSize: '2.5rem', marginTop: 0, fontWeight: '900', letterSpacing: '-1px', textShadow: `0 0 15px ${AMAZON_GREEN}` }}>Rubik's Solver AI</h1>
-                            <div style={{ height: '30px', marginBottom: '10px' }}>
-                                <span style={{ color: '#888', fontSize: '16px', fontWeight: 'bold' }}>Detected: <b style={{color: '#FFF', textShadow: '0 0 5px white'}}>{detectedFace}</b></span>
+                        {/* Main Video & Scanning Panel */}
+                        <div style={{
+                            display: 'flex', flexDirection: 'column', alignItems: 'center', background: PANEL_BG,
+                            padding: '28px', borderRadius: '16px', border: '1px solid rgba(255, 255, 255, 0.12)',
+                            boxShadow: '0 24px 60px rgba(0, 0, 0, 0.8)'
+                        }}>
+                            <h1 style={{ color: TEXT_PRIMARY, marginBottom: '6px', fontSize: '2.4rem', marginTop: 0, fontWeight: '800', letterSpacing: '-0.5px' }}>
+                                Rubik&apos;s Solver AI
+                            </h1>
+
+                            <div style={{
+                                fontSize: '13px', color: TEXT_SECONDARY, background: CARD_BG,
+                                border: '1px solid rgba(255, 255, 255, 0.08)', borderRadius: '20px',
+                                padding: '5px 16px', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px'
+                            }}>
+                                <span style={{ color: ORANGE_PRIMARY }}>●</span>
+                                <span>Calibrated Profile: <b>{calibratedProfile ? 'ACTIVE (Custom Palette)' : 'Default Sensors'}</b></span>
                             </div>
 
-                            <div style={{ position: 'relative', width: '100%', maxWidth: '700px', aspectRatio: '16/9', backgroundColor: '#000', borderRadius: '10px', border: `4px solid ${AMAZON_GREEN}`, boxShadow: `0 0 25px rgba(31, 166, 88, 0.3)`, overflow: 'hidden' }}>
+                            <div style={{ height: '28px', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <span style={{ color: TEXT_SECONDARY, fontSize: '14px', fontWeight: '600' }}>Status:</span>
+                                <b style={{ color: (isCubePresent && validCount === 9) ? ORANGE_PRIMARY : '#E0E4EE', fontSize: '15px' }}>
+                                    {detectedFace}
+                                </b>
+                            </div>
+
+                            {/* Camera Viewport with Distinctive Outline */}
+                            <div style={{
+                                position: 'relative', width: '100%', maxWidth: '680px', aspectRatio: '16/9',
+                                backgroundColor: '#000', borderRadius: '12px',
+                                border: isCubePresent && validCount === 9
+                                    ? `2px solid ${ORANGE_PRIMARY}`
+                                    : (isCubePresent ? '1.5px solid rgba(255, 107, 0, 0.5)' : '1px solid rgba(255, 255, 255, 0.16)'),
+                                overflow: 'hidden', transition: 'border-color 0.2s ease'
+                            }}>
                                 <video ref={mainVideoRef} autoPlay playsInline muted style={{ width: '100%', height: '100%', objectFit: 'cover', transform: 'scaleX(-1)' }} />
 
-                                <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', height: '80%', aspectRatio: '1/1', border: `4px solid ${scanProgress > 0 ? AMAZON_GREEN : '#555'}`, transition: 'border-color 0.2s', display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gridTemplateRows: '1fr 1fr 1fr', borderRadius: '8px', overflow: 'hidden', boxShadow: scanProgress > 0 ? `0 0 15px ${AMAZON_GREEN}, inset 0 0 15px ${AMAZON_GREEN}` : 'none' }}>
-                                    <div style={{ position: 'absolute', top: 0, left: 0, width: `${scanProgress}%`, height: '6px', background: AMAZON_GREEN, transition: 'width 0.1s linear', boxShadow: `0 0 10px ${AMAZON_GREEN}` }}/>
-                                    {[...Array(9)].map((_, i) => <div key={i} style={{ border: '1px solid rgba(255,255,255,0.15)' }} />)}
+                                {/* 3x3 Overlay Grid */}
+                                <div style={{
+                                    position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)',
+                                    height: '80%', aspectRatio: '1/1',
+                                    border: isCubePresent && validCount === 9 ? `2px solid ${ORANGE_PRIMARY}` : '1.5px solid rgba(255, 255, 255, 0.3)',
+                                    transition: 'border-color 0.2s', display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gridTemplateRows: '1fr 1fr 1fr',
+                                    borderRadius: '8px', overflow: 'hidden'
+                                }}>
+                                    {/* 1.0s Smooth Hold Countdown Progress Bar */}
+                                    <div style={{
+                                        position: 'absolute', top: 0, left: 0, width: `${scanProgress}%`, height: '5px',
+                                        background: ORANGE_PRIMARY, transition: 'width 0.1s linear'
+                                    }}/>
+                                    {[...Array(9)].map((_, i) => <div key={i} style={{ border: '1px solid rgba(255, 255, 255, 0.15)' }} />)}
                                 </div>
+
+                                {/* No Cube Alignment Notice */}
+                                {!isCubePresent && (
+                                    <div style={{
+                                        position: 'absolute', bottom: '15px', left: '50%', transform: 'translateX(-50%)',
+                                        background: 'rgba(8, 9, 12, 0.88)', padding: '6px 16px', borderRadius: '6px',
+                                        border: '1px solid rgba(255, 255, 255, 0.18)', color: '#D0D4DC', fontSize: '12px', fontWeight: '700',
+                                        letterSpacing: '0.8px', textTransform: 'uppercase', backdropFilter: 'blur(4px)'
+                                    }}>
+                                        Hold Cube in Grid
+                                    </div>
+                                )}
                             </div>
 
                             <canvas ref={mainCanvasRef} style={{ display: 'none' }} />
 
+                            {/* Diagnostics HUD Panel */}
+                            {showDiagnostics && (
+                                <div style={{
+                                    marginTop: '12px', width: '100%', maxWidth: '680px', background: CARD_BG,
+                                    border: '1px solid rgba(255, 255, 255, 0.12)', borderRadius: '10px', padding: '14px', fontSize: '12px',
+                                    display: 'flex', flexDirection: 'column', gap: '8px'
+                                }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                        <span style={{ fontWeight: '700', color: ORANGE_PRIMARY }}>Diagnostics Monitor</span>
+                                        <span style={{ color: isCubePresent ? (validCount === 9 ? ORANGE_PRIMARY : '#E0E4EE') : TEXT_SECONDARY }}>
+                                            Presence Score: <b>{Math.round(presenceScore * 100)}%</b> ({isCubePresent ? `${validCount}/9 Valid Colors` : 'No Cube Detected'})
+                                        </span>
+                                    </div>
+                                    {diagnosticsData && (
+                                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px' }}>
+                                            {MIRRORED_DIAGNOSTIC_INDICES.map((idx) => {
+                                                const col = diagnosticsData.detected_colors?.[idx];
+                                                const isUnknown = !col || col === 'unknown';
+                                                const textColor = DIAGNOSTIC_COLOR_MAP[col] || '#8A92A4';
+                                                return (
+                                                    <div key={idx} style={{
+                                                        background: '#08090C', padding: '5px 8px', borderRadius: '4px',
+                                                        border: isUnknown ? '1px solid rgba(255, 255, 255, 0.12)' : `1px solid ${textColor}55`,
+                                                        fontSize: '11px', display: 'flex', justifyContent: 'space-between', alignItems: 'center'
+                                                    }}>
+                                                        <span style={{ color: textColor, fontWeight: '700' }}>
+                                                            {col ? col.toUpperCase() : 'UNKNOWN'}
+                                                        </span>
+                                                        <span style={{ color: '#7E8696' }}>{diagnosticsData.hue_angles?.[idx]}°</span>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
                             {solveError && (
-                                <div style={{ marginTop: '15px', padding: '12px 20px', background: 'rgba(216, 43, 51, 0.1)', color: POMEGRANATE_RED, border: `1px solid ${POMEGRANATE_RED}`, borderRadius: '8px', fontWeight: 'bold', textAlign: 'center', boxShadow: `0 0 10px rgba(216, 43, 51, 0.2)` }}>
+                                <div style={{ marginTop: '14px', padding: '12px 18px', background: 'rgba(239, 68, 68, 0.1)', color: RED_ACCENT, border: `1.5px solid ${RED_ACCENT}`, borderRadius: '8px', fontWeight: '700', textAlign: 'center' }}>
                                     {solveError}
                                 </div>
                             )}
                         </div>
 
-                        <div style={{ background: PANEL_BG, padding: '25px', borderRadius: '15px', display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: '320px', border: '1px solid #1f2533', boxShadow: '0 20px 50px rgba(0,0,0,0.8)' }}>
-                            <h2 style={{marginTop:0, color: '#FFF', fontWeight:'800', letterSpacing:'1px', textShadow: `0 0 10px ${AMAZON_GREEN}`}}>Scanned Faces</h2>
-                            <div style={{ background: '#181b21', padding: '15px', borderRadius: '10px', width: '100%', marginBottom: '20px', fontSize: '12px', lineHeight: '1.6', borderLeft: `4px solid ${AMAZON_GREEN}` }}>
-                                <h3 style={{marginTop:0, color:'white', marginBottom:'8px', fontSize:'14px', fontWeight:'800'}}>Instructions</h3>
-                                <div style={{fontWeight: '800', color: AMAZON_GREEN, marginBottom: '2px'}}>1. Orientation guide:</div>
-                                {customScheme ? (
-                                    <ul style={{margin:0, paddingLeft:'20px', color: '#aaa', marginBottom:'10px'}}>
-                                        <li>Main sides: hold <b style={{color:'white'}}>{customScheme.mapping.up.name}</b> on top.</li>
-                                        <li>{customScheme.mapping.up.name} face: hold <b style={{color:'white'}}>{customScheme.mapping.back.name}</b> on top.</li>
-                                        <li>{customScheme.mapping.down.name} face: hold <b style={{color:'white'}}>{customScheme.mapping.front.name}</b> on top.</li>
+                        {/* Scanned Faces Grid Panel */}
+                        <div style={{
+                            background: PANEL_BG, padding: '26px', borderRadius: '16px', display: 'flex',
+                            flexDirection: 'column', alignItems: 'center', minWidth: '320px',
+                            border: '1px solid rgba(255, 255, 255, 0.12)', boxShadow: '0 24px 60px rgba(0,0,0,0.8)'
+                        }}>
+                            <h2 style={{ marginTop: 0, color: TEXT_PRIMARY, fontWeight: '800', letterSpacing: '-0.3px', fontSize: '1.4rem' }}>
+                                Scanned Faces
+                            </h2>
+                            <div style={{ background: CARD_BG, padding: '14px', borderRadius: '10px', width: '100%', marginBottom: '18px', fontSize: '12px', lineHeight: '1.6', borderLeft: `3px solid ${ORANGE_PRIMARY}`, boxSizing: 'border-box' }}>
+                                <h3 style={{ marginTop: 0, color: TEXT_PRIMARY, marginBottom: '6px', fontSize: '13px', fontWeight: '800' }}>Instructions</h3>
+                                <div style={{ fontWeight: '700', color: ORANGE_PRIMARY, marginBottom: '2px' }}>1. Orientation guide:</div>
+                                {calibratedProfile ? (
+                                    <ul style={{ margin: 0, paddingLeft: '18px', color: TEXT_SECONDARY, marginBottom: '8px' }}>
+                                        <li>Main sides: hold <b style={{ color: TEXT_PRIMARY }}>{calibratedProfile.mapping.up?.displayName || 'White'}</b> on top.</li>
+                                        <li>{calibratedProfile.mapping.up?.displayName || 'White'} face: hold <b style={{ color: TEXT_PRIMARY }}>{calibratedProfile.mapping.back?.displayName || 'Blue'}</b> on top.</li>
+                                        <li>{calibratedProfile.mapping.down?.displayName || 'Yellow'} face: hold <b style={{ color: TEXT_PRIMARY }}>{calibratedProfile.mapping.front?.displayName || 'Green'}</b> on top.</li>
                                     </ul>
                                 ) : (
-                                    <ul style={{margin:0, paddingLeft:'20px', color: '#aaa', marginBottom:'10px'}}>
-                                        <li>Main sides: hold <b style={{color:'white'}}>White</b> on top.</li>
-                                        <li>White face: hold <b style={{color:'white'}}>Blue</b> on top.</li>
-                                        <li>Yellow face: hold <b style={{color:'white'}}>Green</b> on top.</li>
+                                    <ul style={{ margin: 0, paddingLeft: '18px', color: TEXT_SECONDARY, marginBottom: '8px' }}>
+                                        <li>Main sides: hold <b style={{ color: TEXT_PRIMARY }}>White</b> on top.</li>
+                                        <li>White face: hold <b style={{ color: TEXT_PRIMARY }}>Blue</b> on top.</li>
+                                        <li>Yellow face: hold <b style={{ color: TEXT_PRIMARY }}>Green</b> on top.</li>
                                     </ul>
                                 )}
-                                <div style={{fontWeight: '800', color: AMAZON_GREEN, marginBottom: '2px'}}>2. How to scan:</div>
-                                <div style={{color: '#aaa'}}>Align in grid. Hold steady for 1 second.</div>
+                                <div style={{ fontWeight: '700', color: ORANGE_PRIMARY, marginBottom: '2px' }}>2. How to scan:</div>
+                                <div style={{ color: TEXT_SECONDARY }}>Align cube in grid. All 9 stickers must be valid colors. Hold steady for 1.0 second.</div>
                             </div>
                             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px' }}>
                                 <div /> <FaceGrid faceObj={faceData.up} label="Up" /> <div /> <div />
@@ -536,63 +871,80 @@ const Scanner = () => {
                     </div>
 
                     {/* ================= STAGE 3: SOLUTION ================= */}
-                    <div style={{ width: '100vw', height: '100vh', padding: '20px', boxSizing: 'border-box', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
+                    <div style={{ width: '100vw', height: '100vh', padding: '24px', boxSizing: 'border-box', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
 
-                        <div style={{ background: PANEL_BG, padding: '30px', borderRadius: '20px', width: '95%', maxWidth: '1000px', display: 'flex', gap: '30px', border: '1px solid #1f2533', boxShadow: `0 20px 60px rgba(0,0,0,0.9), 0 0 50px rgba(31, 166, 88, 0.05)`, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+                        <div style={{
+                            background: PANEL_BG, padding: '32px', borderRadius: '20px', width: '95%', maxWidth: '1020px',
+                            display: 'flex', gap: '32px', border: '1px solid rgba(255, 255, 255, 0.12)',
+                            boxShadow: '0 24px 60px rgba(0, 0, 0, 0.9)', alignItems: 'flex-start', flexWrap: 'wrap'
+                        }}>
                             <div style={{ flex: '1 1 40%', minWidth: '280px' }}>
-                                <h1 style={{marginTop:0, color: '#FFF', fontSize: '2.5rem', fontWeight:'900', letterSpacing:'-1px', textShadow: `0 0 20px ${AMAZON_GREEN}`}}>Solution Ready</h1>
+                                <h1 style={{ marginTop: 0, color: TEXT_PRIMARY, fontSize: '2.4rem', fontWeight: '800', letterSpacing: '-0.5px' }}>
+                                    Solution Ready
+                                </h1>
 
                                 {isEasterEgg ? (
                                     <div style={{ textAlign: 'center' }}>
-                                        <p style={{ fontSize: '20px', color: '#FFF', margin: '20px 0', lineHeight: '1.5', fontWeight: 'bold' }}>{finalSolution}</p>
-                                        <img src="/solved-cake.png" alt="Solved!" style={{ maxWidth: '250px', borderRadius: '15px', border: `4px solid ${AMAZON_GREEN}`, boxShadow: `0 0 20px rgba(31, 166, 88, 0.4)` }} />
+                                        <p style={{ fontSize: '18px', color: TEXT_PRIMARY, margin: '20px 0', lineHeight: '1.5', fontWeight: '700' }}>{finalSolution}</p>
+                                        <img src="/solved-cake.png" alt="Solved!" style={{ maxWidth: '240px', borderRadius: '12px', border: `2px solid ${ORANGE_PRIMARY}` }} />
                                     </div>
                                 ) : (
                                     <>
-                                        <div style={{ margin: '20px 0', padding: '15px', background: '#181b21', borderRadius: '10px', borderLeft: `4px solid ${AMAZON_GREEN}` }}>
-                                            <p style={{ fontSize: '13px', color: '#888', marginBottom: '8px', fontWeight: '800', textTransform: 'uppercase' }}>Starting Orientation:</p>
-                                            <p style={{ fontSize: '14px', color: '#fff', fontWeight: 'bold', margin:0, display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
-                                                 <span style={{ color: 'white', background: customScheme ? `rgb(${customScheme.mapping.front.rgb.join(',')})` : '#1FA658', padding: '6px 10px', borderRadius: '4px', textShadow: '0 0 2px black', border: '1px solid rgba(255,255,255,0.2)' }}>
-                                                     {(customScheme ? customScheme.mapping.front.name : "GREEN").toUpperCase()} FRONT
-                                                 </span>
-                                                <span style={{color: '#888'}}>+</span>
-                                                <span style={{ color: 'white', background: customScheme ? `rgb(${customScheme.mapping.up.rgb.join(',')})` : '#e0e0e0', color: customScheme ? 'white' : 'black', padding: '6px 10px', borderRadius: '4px', border: '1px solid rgba(255,255,255,0.2)', textShadow: customScheme ? '0 0 2px black' : 'none' }}>
-                                                     {(customScheme ? customScheme.mapping.up.name : "WHITE").toUpperCase()} TOP
-                                                 </span>
+                                        <div style={{ margin: '18px 0', padding: '14px', background: CARD_BG, borderRadius: '10px', borderLeft: `3px solid ${ORANGE_PRIMARY}` }}>
+                                            <p style={{ fontSize: '12px', color: TEXT_SECONDARY, marginBottom: '8px', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Starting Orientation:</p>
+                                            <p style={{ fontSize: '13px', color: TEXT_PRIMARY, fontWeight: '700', margin: 0, display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+                                                <span style={{
+                                                    color: 'white',
+                                                    background: calibratedProfile?.mapping.front ? `rgb(${calibratedProfile.mapping.front.rgb.join(',')})` : '#00B348',
+                                                    padding: '5px 10px', borderRadius: '4px', border: '1px solid rgba(255,255,255,0.2)'
+                                                }}>
+                                                    {(calibratedProfile?.mapping.front?.displayName || "GREEN").toUpperCase()} FRONT
+                                                </span>
+                                                <span style={{ color: TEXT_SECONDARY }}>+</span>
+                                                <span style={{
+                                                    background: calibratedProfile?.mapping.up ? `rgb(${calibratedProfile.mapping.up.rgb.join(',')})` : '#F5F5F7',
+                                                    color: calibratedProfile ? 'white' : 'black',
+                                                    padding: '5px 10px', borderRadius: '4px', border: '1px solid rgba(255,255,255,0.2)'
+                                                }}>
+                                                    {(calibratedProfile?.mapping.up?.displayName || "WHITE").toUpperCase()} TOP
+                                                </span>
                                             </p>
                                         </div>
 
-                                        <div style={{ maxHeight: '220px', overflowY: 'auto', fontSize: '16px', fontFamily: 'monospace', fontWeight: 'bold', background: '#0a0c10', padding:'15px', borderRadius:'10px', border: '1px solid #222', display:'flex', flexWrap:'wrap', gap:'10px', alignContent: 'flex-start' }}>
+                                        <div style={{
+                                            maxHeight: '220px', overflowY: 'auto', fontSize: '15px', fontFamily: 'monospace',
+                                            fontWeight: '700', background: '#08090C', padding: '14px', borderRadius: '10px',
+                                            border: '1px solid rgba(255, 255, 255, 0.10)', display: 'flex', flexWrap: 'wrap', gap: '8px', alignContent: 'flex-start'
+                                        }}>
                                             {solutionMoves.map((move, index) => {
                                                 const isActive = index === currentMoveIndex;
                                                 return (
                                                     <span key={index} onClick={() => { setIsPlaying(false); setCurrentMoveIndex(index); }}
-                                                          style={{
-                                                              padding: '8px 14px', borderRadius: '6px', cursor: 'pointer',
-                                                              background: isActive ? AMAZON_GREEN : '#181b21',
-                                                              color: isActive ? '#000' : '#FFF',
-                                                              border: isActive ? `1px solid ${AMAZON_GREEN}` : '1px solid #333',
-                                                              boxShadow: isActive ? `0 0 15px rgba(31, 166, 88, 0.6)` : 'none',
-                                                              opacity: index < currentMoveIndex ? 0.3 : 1,
-                                                              transform: isActive ? 'scale(1.15)' : 'scale(1)',
-                                                              transition: 'all 0.2s cubic-bezier(0.25, 1, 0.5, 1)'
-                                                          }}>
+                                                        style={{
+                                                            padding: '8px 13px', borderRadius: '6px', cursor: 'pointer',
+                                                            background: isActive ? ORANGE_PRIMARY : CARD_BG,
+                                                            color: isActive ? '#08090C' : TEXT_PRIMARY,
+                                                            border: isActive ? `1.5px solid ${ORANGE_PRIMARY}` : '1px solid rgba(255, 255, 255, 0.10)',
+                                                            opacity: index < currentMoveIndex ? 0.35 : 1,
+                                                            transform: isActive ? 'scale(1.12)' : 'scale(1)',
+                                                            transition: 'all 0.15s ease'
+                                                        }}>
                                                         {move}
                                                     </span>
-                                                )
+                                                );
                                             })}
                                         </div>
                                     </>
                                 )}
 
-                                <button onClick={resetForNewCube} style={{ ...btnStyle, marginTop: '20px', width: '100%', padding: '15px', fontSize: '16px', background: 'rgba(31, 166, 88, 0.05)' }}>
+                                <button onClick={resetForNewCube} style={{ ...btnStyle, marginTop: '20px', width: '100%', padding: '14px', fontSize: '15px' }}>
                                     ← SOLVE ANOTHER CUBE
                                 </button>
                             </div>
 
                             {!isEasterEgg && (
                                 <div style={{ flex: '1 1 50%', minWidth: '280px', width: '100%', display: 'flex', flexDirection: 'column' }}>
-                                    <div style={{ height: '400px', width: '100%', borderRadius: '15px', overflow: 'hidden', border: '1px solid #1f2533', boxShadow: '0 0 30px rgba(0,0,0,0.8)' }}>
+                                    <div style={{ height: '390px', width: '100%', borderRadius: '14px', overflow: 'hidden' }}>
                                         <Cube3D scrambledColors={scrambledColors} solutionMoves={solutionMoves} currentMoveIndex={currentMoveIndex} isPlaying={isPlaying} tps={tps} onMoveComplete={handleMoveComplete} />
                                     </div>
                                     <VisualizerControls isPlaying={isPlaying} setIsPlaying={setIsPlaying} tps={tps} setTps={setTps} currentMoveIndex={currentMoveIndex} totalMoves={solutionMoves.length} setCurrentMoveIndex={setCurrentMoveIndex} />

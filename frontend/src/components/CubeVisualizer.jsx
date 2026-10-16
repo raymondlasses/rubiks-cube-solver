@@ -1,19 +1,20 @@
-import React, { useRef, useState, useEffect, useMemo } from 'react';
+import React, { useRef, useEffect, useMemo } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
-import { OrbitControls, PerspectiveCamera } from '@react-three/drei';
+import { OrbitControls, PerspectiveCamera, ContactShadows } from '@react-three/drei';
 import * as THREE from 'three';
+import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 
 const COLOR_PALETTE = {
-    'white':  '#e0e0e0',
-    'yellow': '#ffeb3b',
-    'green':  '#00c853',
-    'blue':   '#2962ff',
-    'red':    '#d50000',
-    'orange': '#ff6d00',
-    'black':  '#dddddd'  // Internal plastic
+    'white':  '#F5F5F7',
+    'yellow': '#FFD600',
+    'green':  '#00B348',
+    'blue':   '#0055D4',
+    'red':    '#D91E2E',
+    'orange': '#FF6500',
+    'black':  '#14161B'  // Premium internal speedcube core plastic
 };
 
-const CUBE_SIZE = 0.95;
+const CUBE_SIZE = 0.94;
 const SPACING = 1.0;
 
 const getAxisAndDirection = (move) => {
@@ -46,12 +47,32 @@ const isCubieInMove = (pos, moveChar) => {
     return false;
 };
 
+// Smooth magnetic snap ease: quick acceleration, snappy finish with subtle micro-settle
+const magneticEase = (x) => {
+    // easeOutCubic with a very subtle magnetic latch
+    return 1 - Math.pow(1 - x, 3);
+};
+
 const RubiksCube = ({ scrambledColors, solutionMoves, currentMoveIndex, isPlaying, tps, onAnimationComplete }) => {
     const groupRef = useRef();
     const cubiesRef = useRef([]);
-    const pivotRef = useRef(new THREE.Object3D());
+    const pivot = useMemo(() => new THREE.Object3D(), []);
+    const pivotRef = useRef(pivot);
 
-    const animState = useRef({ active: false, moveIndex: -1, progress: 0, axis: new THREE.Vector3(), angle: 0, movingIndices: [] });
+    // Shared rounded geometry across all 27 cubies for peak performance
+    const roundedGeometry = useMemo(() => {
+        return new RoundedBoxGeometry(CUBE_SIZE, CUBE_SIZE, CUBE_SIZE, 4, 0.055);
+    }, []);
+
+    const animState = useRef({
+        active: false,
+        moveIndex: -1,
+        elapsed: 0,
+        duration: 0.5,
+        axis: new THREE.Vector3(),
+        angle: 0,
+        movingIndices: []
+    });
 
     const initialCubies = useMemo(() => {
         const cubies = [];
@@ -62,8 +83,11 @@ const RubiksCube = ({ scrambledColors, solutionMoves, currentMoveIndex, isPlayin
                 for (let z = -1; z <= 1; z++) {
                     const pos = new THREE.Vector3(x * SPACING, y * SPACING, z * SPACING);
 
+                    // High-end tactile speedcube interior plastic
                     const blackMat = new THREE.MeshStandardMaterial({
-                        color: COLOR_PALETTE['black'], roughness: 1.0, metalness: 0.0
+                        color: COLOR_PALETTE['black'],
+                        roughness: 0.45,
+                        metalness: 0.05
                     });
                     const mats = Array(6).fill(blackMat);
 
@@ -86,14 +110,11 @@ const RubiksCube = ({ scrambledColors, solutionMoves, currentMoveIndex, isPlayin
         if (colorName && colorName.startsWith('rgb')) hex = colorName;
         else if (COLOR_PALETTE[colorName]) hex = COLOR_PALETTE[colorName];
 
-        // --- MATTE GLOW EFFECT ---
-        // Roughness 1 = Zero shiny reflections. Emissive creates the inner light.
+        // Authentic speedcube stickerless/glossy plastic finish with specular highlight
         return new THREE.MeshStandardMaterial({
             color: hex,
-            emissive: hex,
-            emissiveIntensity: 0.25,
-            roughness: 1.0,
-            metalness: 0.0
+            roughness: 0.28,
+            metalness: 0.02
         });
     }
 
@@ -143,21 +164,33 @@ const RubiksCube = ({ scrambledColors, solutionMoves, currentMoveIndex, isPlayin
                 }
             });
 
-            animState.current = { active: true, moveIndex: currentMoveIndex, progress: 0, axis, angle, movingIndices };
+            const duration = Math.max(0.08, 1.0 / tps);
+            animState.current = {
+                active: true,
+                moveIndex: currentMoveIndex,
+                elapsed: 0,
+                duration,
+                axis,
+                angle,
+                movingIndices
+            };
         }
-    }, [isPlaying, currentMoveIndex, solutionMoves]);
+    }, [isPlaying, currentMoveIndex, solutionMoves, tps]);
 
     useFrame((state, delta) => {
         if (!isPlaying && animState.current.active) return;
         if (!animState.current.active) return;
 
-        const durationInSeconds = 1.0 / tps;
-        const speed = Math.abs(animState.current.angle) / durationInSeconds;
-        const step = speed * delta;
+        animState.current.elapsed += delta;
+        const tau = Math.min(1.0, animState.current.elapsed / animState.current.duration);
+        const progress = magneticEase(tau);
 
-        animState.current.progress += step;
+        const currentRot = animState.current.angle * progress;
+        pivotRef.current.rotation.set(0, 0, 0);
+        pivotRef.current.rotateOnWorldAxis(animState.current.axis, currentRot);
+        pivotRef.current.updateMatrixWorld();
 
-        if (Math.abs(animState.current.progress) >= Math.abs(animState.current.angle)) {
+        if (tau >= 1.0) {
             const finalRot = animState.current.angle;
             pivotRef.current.rotation.set(0, 0, 0);
             pivotRef.current.rotateOnWorldAxis(animState.current.axis, finalRot);
@@ -180,20 +213,18 @@ const RubiksCube = ({ scrambledColors, solutionMoves, currentMoveIndex, isPlayin
             pivotRef.current.rotation.set(0, 0, 0);
             animState.current.active = false;
             onAnimationComplete();
-        } else {
-            pivotRef.current.rotateOnWorldAxis(animState.current.axis, step * Math.sign(animState.current.angle));
         }
     });
 
     return (
         <group ref={groupRef}>
-            <primitive object={pivotRef.current} />
+            <primitive object={pivot} />
             {initialCubies.map((c, i) => (
                 <mesh
                     key={i}
                     ref={el => cubiesRef.current[i] = el}
                     position={c.pos}
-                    geometry={new THREE.BoxGeometry(CUBE_SIZE, CUBE_SIZE, CUBE_SIZE)}
+                    geometry={roundedGeometry}
                     material={c.mats}
                 />
             ))}
@@ -203,12 +234,28 @@ const RubiksCube = ({ scrambledColors, solutionMoves, currentMoveIndex, isPlayin
 
 export const Cube3D = ({ scrambledColors, solutionMoves, currentMoveIndex, isPlaying, tps, onMoveComplete }) => {
     return (
-        <Canvas style={{ height: '100%', minHeight: '400px', width: '100%', background: '#17252A', borderRadius: '15px', border: '2px solid #3AAFA9' }}>
-            <PerspectiveCamera makeDefault position={[4, 3.5, 6]} fov={40} />
-            <OrbitControls enablePan={false} minDistance={5} maxDistance={20} />
+        <Canvas style={{
+            height: '100%',
+            minHeight: '400px',
+            width: '100%',
+            background: '#08090C',
+            borderRadius: '14px',
+            border: '1px solid rgba(255, 255, 255, 0.12)'
+        }}>
+            <PerspectiveCamera makeDefault position={[4.2, 3.8, 6.2]} fov={38} />
+            <OrbitControls enablePan={false} minDistance={5} maxDistance={18} />
 
-            {/* AMBIENT LIGHT ONLY: Completely removes directional shadows & "sun" reflections */}
-            <ambientLight intensity={1.5} />
+            {/* Studio Lighting */}
+            <ambientLight intensity={0.55} />
+            {/* Soft Warm Key Light */}
+            <directionalLight position={[6, 9, 7]} intensity={1.2} />
+            {/* Soft Fill Light */}
+            <directionalLight position={[-6, -2, -5]} intensity={0.35} color="#DCE6F5" />
+            {/* Space Orange Rim Light: Signature Theme Accent */}
+            <pointLight position={[-4, 4, -4]} intensity={2.2} color="#FF6B00" />
+
+            {/* Contact ground shadow */}
+            <ContactShadows position={[0, -2.15, 0]} opacity={0.65} scale={8} blur={2.2} far={4.5} color="#000000" />
 
             <RubiksCube
                 scrambledColors={scrambledColors}
@@ -223,60 +270,72 @@ export const Cube3D = ({ scrambledColors, solutionMoves, currentMoveIndex, isPla
 };
 
 export const VisualizerControls = ({
-                                       isPlaying, setIsPlaying,
-                                       tps, setTps,
-                                       currentMoveIndex, totalMoves, setCurrentMoveIndex
-                                   }) => {
+    isPlaying, setIsPlaying,
+    tps, setTps,
+    currentMoveIndex, totalMoves, setCurrentMoveIndex
+}) => {
     const tpsOptions = [0.3, 0.5, 0.8, 1.0, 1.5, 2.0, 3.0, 5.0, 10.0, 15.0];
 
     return (
         <div style={{
-            background: '#17252A', padding: '20px', borderRadius: '15px',
-            marginTop: '20px', border: '2px solid #2B7A78', width: '100%', boxSizing: 'border-box'
+            background: '#0E1117',
+            padding: '20px',
+            borderRadius: '14px',
+            marginTop: '16px',
+            border: '1px solid rgba(255, 255, 255, 0.12)',
+            width: '100%',
+            boxSizing: 'border-box'
         }}>
-            <div style={{ display: 'flex', gap: '20px', alignItems: 'center', marginBottom: '15px', flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', gap: '20px', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap' }}>
                 <button
                     onClick={() => setIsPlaying(!isPlaying)}
                     style={{
-                        background: isPlaying ? '#ff4444' : '#3AAFA9',
-                        color: isPlaying ? 'white' : '#17252A',
-                        border: '2px solid #0a1114', padding: '12px 30px', borderRadius: '8px',
-                        fontWeight: '800', cursor: 'pointer', fontSize: '16px', letterSpacing:'1px',
-                        minWidth: '120px', boxShadow: '0 4px 0 rgba(0,0,0,0.2)'
+                        background: isPlaying ? 'rgba(239, 68, 68, 0.12)' : 'rgba(255, 107, 0, 0.12)',
+                        color: isPlaying ? '#EF4444' : '#FF6B00',
+                        border: isPlaying ? '1.5px solid #EF4444' : '1.5px solid #FF6B00',
+                        padding: '12px 28px',
+                        borderRadius: '8px',
+                        fontWeight: '800',
+                        cursor: 'pointer',
+                        fontSize: '15px',
+                        letterSpacing: '1px',
+                        minWidth: '120px',
+                        transition: 'all 0.2s ease'
                     }}>
                     {isPlaying ? "PAUSE" : "PLAY"}
                 </button>
 
                 <div style={{ display: 'flex', flexDirection: 'column', flexGrow: 1, minWidth: '200px' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', color: '#DEF2F1', fontSize: '12px', marginBottom: '6px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', color: '#9AA0B0', fontSize: '11px', fontWeight: '700', letterSpacing: '0.5px', marginBottom: '8px' }}>
                         <span>ANIMATION SPEED</span>
-                        <span style={{fontWeight:'bold'}}>{tps} TPS</span>
+                        <span style={{ fontWeight: '800', color: '#FF6B00' }}>{tps} TPS</span>
                     </div>
-                    <div style={{ display: 'flex', gap: '4px', background: '#0a1114', padding: '6px', borderRadius: '8px', border: '1px solid #222', boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.5)' }}>
+                    <div style={{ display: 'flex', gap: '5px', background: '#08090C', padding: '6px', borderRadius: '8px', border: '1px solid rgba(255, 255, 255, 0.08)' }}>
                         {tpsOptions.map((val, i) => {
-                            const hue = Math.max(0, 120 - (i * 13.5));
                             const isActive = tps >= val;
                             return (
                                 <div
                                     key={val}
                                     onClick={() => setTps(val)}
                                     style={{
-                                        flex: 1, height: '14px', borderRadius: '3px', cursor: 'pointer',
-                                        background: isActive ? `hsl(${hue}, 100%, 50%)` : '#222',
-                                        boxShadow: isActive ? `0 0 10px hsl(${hue}, 100%, 50%)` : 'none',
-                                        transition: 'all 0.15s ease-out',
-                                        opacity: isActive ? 1 : 0.3
+                                        flex: 1,
+                                        height: '14px',
+                                        borderRadius: '3px',
+                                        cursor: 'pointer',
+                                        background: isActive ? '#FF6B00' : '#1A1E26',
+                                        opacity: isActive ? (0.4 + (i / tpsOptions.length) * 0.6) : 0.3,
+                                        transition: 'all 0.15s ease-out'
                                     }}
                                     title={`${val} Moves per Second`}
                                 />
-                            )
+                            );
                         })}
                     </div>
                 </div>
             </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: '15px', color: '#DEF2F1', background: '#222', padding: '10px', borderRadius: '8px' }}>
-                <span style={{ fontFamily: 'monospace', fontWeight: 'bold', fontSize: '14px', minWidth: '60px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '15px', color: '#F0F2F8', background: '#08090C', padding: '10px 14px', borderRadius: '8px', border: '1px solid rgba(255, 255, 255, 0.08)' }}>
+                <span style={{ fontFamily: 'monospace', fontWeight: 'bold', fontSize: '14px', minWidth: '60px', color: '#FF6B00' }}>
                     {currentMoveIndex} / {totalMoves}
                 </span>
                 <input
@@ -288,7 +347,7 @@ export const VisualizerControls = ({
                         setIsPlaying(false);
                         setCurrentMoveIndex(parseInt(e.target.value));
                     }}
-                    style={{ flexGrow: 1, height: '8px', cursor: 'pointer', accentColor: '#3AAFA9', width: '100%' }}
+                    style={{ flexGrow: 1, height: '6px', cursor: 'pointer', accentColor: '#FF6B00', width: '100%' }}
                 />
             </div>
         </div>

@@ -1,9 +1,11 @@
 from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
-import numpy as np
-from cv_utils import extract_face_features, classify_entire_cube, classify_color_lab
+from pydantic import BaseModel
 from collections import Counter
+import kociemba
+import numpy as np
+
+from cv_utils import extract_face_features, classify_entire_cube, classify_color_lab
 
 app = FastAPI()
 
@@ -18,42 +20,77 @@ app.add_middleware(
 raw_scans = {}
 
 
+@app.get("/")
+def root():
+    return {
+        "status": "online",
+        "service": "Rubik's Solver AI Backend",
+        "docs": "/docs"
+    }
+
+
 class ImageInput(BaseModel):
     image: str
     face_name: str = "auto"
     preview: bool = False
-    custom_palette: list[dict] = None
+    custom_palette: list[dict] | None = None
     picker_mode: bool = False
+
+
+class SolveInput(BaseModel):
+    custom_palette: list[dict] | None = None
 
 
 @app.post("/scan-raw")
 def scan_raw(data: ImageInput):
     try:
-        features = extract_face_features(data.image)
+        extraction = extract_face_features(data.image, data.custom_palette)
+        features = extraction['features']
+        is_cube_present = extraction['is_cube_present']
+        presence_score = extraction['presence_score']
+        presence_reason = extraction['presence_reason']
 
-        valid_count = 0
-        for f in features:
-            lab = np.array(f['lab'])
-            color = classify_color_lab(lab, data.custom_palette)
-            if color != 'unknown':
-                valid_count += 1
+        # 1. Cube Presence Gatekeeper: reject flat surfaces (curtains, blank walls)
+        if not is_cube_present and not data.picker_mode:
+            return {
+                "success": False,
+                "message": "Align cube in grid",
+                "cube_present": False,
+                "presence_score": presence_score,
+                "valid_count": 0,
+                "reason": presence_reason
+            }
 
-        # --- STRICTER GATEKEEPER ---
-        # If less than 7 valid colors are detected, outright reject it (fixes the bad shadow/backlight issue)
-        if valid_count < 7 and not data.picker_mode:
-            return {"success": False, "message": "Poor lighting / Align cube"}
+        valid_count = sum(1 for f in features if f.get('color') != 'unknown')
 
-        has_warnings = valid_count < 9
+        # 2. Strict 9-Sticker Color Validity Gatekeeper: only scan when all 9 are valid
+        if valid_count < 9 and not data.picker_mode:
+            return {
+                "success": False,
+                "message": f"Aligning face ({valid_count}/9 colors valid)",
+                "cube_present": True,
+                "presence_score": presence_score,
+                "valid_count": valid_count,
+                "diagnostics": {
+                    "detected_colors": [f['color'] for f in features],
+                    "hue_angles": [f['hue_angle'] for f in features]
+                }
+            }
 
         center_feature = features[4]
-        center_lab = np.array(center_feature['lab'])
-        center_color_name = classify_color_lab(center_lab, data.custom_palette)
+        center_color_name = center_feature.get('color', 'unknown')
 
         if center_color_name == 'unknown' and not data.picker_mode:
-            return {"success": False, "message": "Center unclear"}
+            return {
+                "success": False,
+                "message": "Center sticker unclear",
+                "cube_present": True,
+                "presence_score": presence_score,
+                "valid_count": valid_count
+            }
 
         if data.custom_palette:
-            color_to_face = {c['name']: c['face'] for c in data.custom_palette}
+            color_to_face = {str(c.get('name', '')).lower(): c.get('face') for c in data.custom_palette if 'face' in c}
         else:
             color_to_face = {
                 'white': 'up', 'yellow': 'down', 'green': 'front',
@@ -63,8 +100,8 @@ def scan_raw(data: ImageInput):
         detected_face = "unknown"
         if data.face_name != "auto":
             detected_face = data.face_name
-        elif center_color_name in color_to_face:
-            detected_face = color_to_face[center_color_name]
+        elif center_color_name.lower() in color_to_face:
+            detected_face = color_to_face[center_color_name.lower()]
 
         if not data.preview and not data.picker_mode:
             if detected_face != "unknown":
@@ -77,7 +114,14 @@ def scan_raw(data: ImageInput):
             "rgb_preview": [f['rgb'] for f in features],
             "raw_features": features,
             "scanned_count": len(raw_scans),
-            "has_warnings": has_warnings
+            "has_warnings": False,
+            "cube_present": True,
+            "presence_score": presence_score,
+            "valid_count": valid_count,
+            "diagnostics": {
+                "detected_colors": [f['color'] for f in features],
+                "hue_angles": [f['hue_angle'] for f in features]
+            }
         }
 
     except Exception as e:
@@ -86,7 +130,7 @@ def scan_raw(data: ImageInput):
 
 
 @app.post("/solve-global")
-def solve_global():
+def solve_global(data: SolveInput | None = None):
     kociemba_order = ['up', 'right', 'front', 'down', 'left', 'back']
     missing = [f for f in kociemba_order if f not in raw_scans]
     if missing:
@@ -96,14 +140,19 @@ def solve_global():
         for face in kociemba_order:
             ordered_features.extend(raw_scans[face])
 
-        classified_faces = classify_entire_cube(ordered_features)
+        custom_palette = data.custom_palette if data else None
+        classified_faces = classify_entire_cube(ordered_features, custom_palette=custom_palette)
 
         face_to_kociemba = {'up': 'U', 'front': 'F', 'right': 'R', 'down': 'D', 'left': 'L', 'back': 'B'}
         kociemba_to_face = {v: k for k, v in face_to_kociemba.items()}
 
-        solution_string = "".join([face_to_kociemba[face] for face in classified_faces])
+        if any(face not in face_to_kociemba for face in classified_faces):
+            raise HTTPException(
+                status_code=400,
+                detail="Color classification was ambiguous on one or more stickers. Please verify lighting and rescan."
+            )
 
-        import kociemba
+        solution_string = "".join([face_to_kociemba[face] for face in classified_faces])
 
         counts = Counter(solution_string)
         errors = sum(max(0, counts[c] - 9) for c in 'URFDLB')
@@ -181,3 +230,21 @@ def solve_global():
 def reset():
     raw_scans.clear()
     return {"message": "Reset done"}
+
+
+@app.post("/calibrate-face")
+def calibrate_face(data: ImageInput):
+    try:
+        extraction = extract_face_features(data.image)
+        features = extraction['features']
+        center = features[4]
+        return {
+            "success": True,
+            "center": center,
+            "all_stickers": features,
+            "is_cube_present": extraction['is_cube_present'],
+            "presence_score": extraction['presence_score'],
+            "presence_reason": extraction['presence_reason']
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
