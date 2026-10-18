@@ -41,11 +41,7 @@ Adapts the computer vision pipeline to your specific physical cube and room ligh
 ![Calibration Screen](frontend/public/calibrate.png)
 
 - **Guided 6-Step Capture**: Calibrates center facelets in sequence (White, Yellow, Green, Blue, Red, Orange) to build a personalized color profile.
-- **Dynamic Capture State**: Clear `CAPTURE [COLOR] FACE` state that updates to `RE-CAPTURE` once a face is sampled.
-- **Smart Validation**: Auto-advances across missing faces without premature transitions, allowing out-of-order scanning while ensuring all 6 sides are recorded before finalizing.
 - **Visual Progress Tracker**: Side panel displays numbered slots that transition to checkmarks (`✓`) upon successful calibration.
-- **Camera Skeleton Loader**: Shimmering 3x3 loading skeleton prevents layout shift while camera access initializes.
-- **Skip to Defaults**: Users with standard WCA-stickered cubes under neutral lighting can jump straight to scanning using factory color profiles.
 
 ---
 
@@ -55,12 +51,11 @@ Reads and verifies the scrambled state of all 6 faces using real-time webcam vid
 ![Main Scanning Screen](frontend/public/scanner.png)
 
 - **Real-Time 3x3 Alignment Grid**: Hold each face inside the overlay grid to extract colors from the 9 facelet regions.
-- **Automated Hold-Steady Detection**: When the cube is held steady for 1 second, the system automatically captures and validates the face.
 - **Standardized Orientation Guide**: Step-by-step instructions guarantee valid orientation:
   1. *White face: scan with Blue on top.*
   2. *Yellow face: scan with Green on top.*
   3. *Remaining sides must be scanned with White on top.*
-- **Unfolded 2D Cube Map**: Live 4x3 net map visualizes captured faces and immediately flags duplicate or missing colors.
+- **Unfolded 2D Cube Map**: Live cube map visualizes captured faces and immediately flags duplicate or missing colors.
 - **Diagnostics Drawer**: Real-time diagnostic metrics including cube presence confidence scores, raw RGB values, and tile validity counts.
 - **One-Click Reset & Recalibrate**: Easily recalibrate or revert to factory default profiles at any time.
 
@@ -76,8 +71,6 @@ Computes the optimal sequence of moves and renders the solution in an interactiv
 - **High-Fidelity 3D Speedcube Model**:
   - **Vibrant Color Palette**: High-contrast, saturated competition shades (pure white, bright yellow, electric green, deep blue, vibrant red, and neon orange).
   - **Glossy Facelet Finish**: Exterior tiles feature subtle specular glossiness reflecting studio key lights.
-  - **Matte Black Core**: Internal plastic crevices and chamfers feature a non-reflective matte finish for realistic speedcube aesthetics.
-  - **Tight Mechanism Tolerances**: Reduced cubie spacing (0.985 scale with 0.045 bevel radius) mimics a tensioned competition puzzle.
 - **Comprehensive Playback Controls**:
   - **Play / Pause** toggle.
   - **Speed Slider & TPS Presets**: Adjust turn rates from slow educational pacing (`0.3 TPS`) up to high-speed simulation (`15.0 TPS`).
