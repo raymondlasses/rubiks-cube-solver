@@ -14,7 +14,7 @@ const COLOR_PALETTE = {
     'black':  '#14161B'  // Premium internal speedcube core plastic
 };
 
-const CUBE_SIZE = 0.94;
+const CUBE_SIZE = 0.985;
 const SPACING = 1.0;
 
 const getAxisAndDirection = (move) => {
@@ -61,7 +61,7 @@ const RubiksCube = ({ scrambledColors, solutionMoves, currentMoveIndex, isPlayin
 
     // Shared rounded geometry across all 27 cubies for peak performance
     const roundedGeometry = useMemo(() => {
-        return new RoundedBoxGeometry(CUBE_SIZE, CUBE_SIZE, CUBE_SIZE, 4, 0.055);
+        return new RoundedBoxGeometry(CUBE_SIZE, CUBE_SIZE, CUBE_SIZE, 4, 0.045);
     }, []);
 
     const animState = useRef({
@@ -110,11 +110,11 @@ const RubiksCube = ({ scrambledColors, solutionMoves, currentMoveIndex, isPlayin
         if (colorName && colorName.startsWith('rgb')) hex = colorName;
         else if (COLOR_PALETTE[colorName]) hex = COLOR_PALETTE[colorName];
 
-        // Authentic speedcube stickerless/glossy plastic finish with specular highlight
+        // Authentic speedcube satin matte plastic finish with reduced glare
         return new THREE.MeshStandardMaterial({
             color: hex,
-            roughness: 0.28,
-            metalness: 0.02
+            roughness: 0.40,
+            metalness: 0.01
         });
     }
 
@@ -245,14 +245,14 @@ export const Cube3D = ({ scrambledColors, solutionMoves, currentMoveIndex, isPla
             <PerspectiveCamera makeDefault position={[4.2, 3.8, 6.2]} fov={38} />
             <OrbitControls enablePan={false} minDistance={5} maxDistance={18} />
 
-            {/* Studio Lighting */}
-            <ambientLight intensity={0.55} />
-            {/* Soft Warm Key Light */}
-            <directionalLight position={[6, 9, 7]} intensity={1.2} />
-            {/* Soft Fill Light */}
-            <directionalLight position={[-6, -2, -5]} intensity={0.35} color="#DCE6F5" />
-            {/* Space Orange Rim Light: Signature Theme Accent */}
-            <pointLight position={[-4, 4, -4]} intensity={2.2} color="#FF6B00" />
+            {/* Studio Lighting - Brighter front lighting with reduced glare */}
+            <ambientLight intensity={0.85} />
+            {/* Primary Front-Top Key Light */}
+            <directionalLight position={[4, 6, 7]} intensity={1.5} />
+            {/* Front-Left Fill Light */}
+            <directionalLight position={[-5, 3, 6]} intensity={0.85} color="#E8EEF8" />
+            {/* Soft Top-Back Rim Fill */}
+            <directionalLight position={[-2, 6, -4]} intensity={0.35} color="#FFFFFF" />
 
             {/* Contact ground shadow */}
             <ContactShadows position={[0, -2.15, 0]} opacity={0.65} scale={8} blur={2.2} far={4.5} color="#000000" />

@@ -63,9 +63,8 @@ const CALIBRATION_STEPS = [
         colorName: 'white',
         colorHex: '#FFFFFF',
         textHex: '#000000',
-        badge: 'TOP (U)',
-        logoTip: true,
-        desc: 'Hold WHITE center face. If it has a logo or brand mark, keep it centered—our corner sampling automatically avoids it!'
+        badge: 'UP',
+        desc: 'Hold WHITE center face squarely within the alignment grid.'
     },
     {
         key: 'down',
@@ -73,7 +72,7 @@ const CALIBRATION_STEPS = [
         colorName: 'yellow',
         colorHex: '#FFD500',
         textHex: '#000000',
-        badge: 'BOTTOM (D)',
+        badge: 'DOWN',
         desc: 'Hold YELLOW center face squarely within the alignment grid.'
     },
     {
@@ -82,7 +81,7 @@ const CALIBRATION_STEPS = [
         colorName: 'green',
         colorHex: '#00B348',
         textHex: '#FFFFFF',
-        badge: 'FRONT (F)',
+        badge: 'FRONT',
         desc: 'Hold GREEN center face squarely within the alignment grid.'
     },
     {
@@ -91,7 +90,7 @@ const CALIBRATION_STEPS = [
         colorName: 'blue',
         colorHex: '#0055D4',
         textHex: '#FFFFFF',
-        badge: 'BACK (B)',
+        badge: 'BACK',
         desc: 'Hold BLUE center face squarely within the alignment grid.'
     },
     {
@@ -100,7 +99,7 @@ const CALIBRATION_STEPS = [
         colorName: 'red',
         colorHex: '#D91E2E',
         textHex: '#FFFFFF',
-        badge: 'RIGHT (R)',
+        badge: 'RIGHT',
         desc: 'Hold RED center face squarely within the alignment grid.'
     },
     {
@@ -109,7 +108,7 @@ const CALIBRATION_STEPS = [
         colorName: 'orange',
         colorHex: '#FF6500',
         textHex: '#FFFFFF',
-        badge: 'LEFT (L)',
+        badge: 'LEFT',
         desc: 'Hold ORANGE center face squarely within the alignment grid.'
     }
 ];
@@ -170,7 +169,44 @@ const FaceGrid = ({ faceObj, label }) => {
     );
 };
 
+const CameraSkeleton = () => {
+    return (
+        <div style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            width: '100%',
+            height: '100%',
+            backgroundColor: '#08090C',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 6,
+            overflow: 'hidden'
+        }}>
+            <div className="camera-shimmer-bar" />
+            <div style={{
+                height: '80%',
+                aspectRatio: '1/1',
+                border: '2px dashed rgba(255, 255, 255, 0.25)',
+                borderRadius: '8px',
+                display: 'grid',
+                gridTemplateColumns: 'repeat(3, 1fr)',
+                gridTemplateRows: 'repeat(3, 1fr)',
+                position: 'relative',
+                zIndex: 2,
+                pointerEvents: 'none'
+            }}>
+                {[...Array(9)].map((_, i) => (
+                    <div key={i} style={{ border: '1px solid rgba(255, 255, 255, 0.12)' }} />
+                ))}
+            </div>
+        </div>
+    );
+};
+
 const Scanner = () => {
+    const [isCameraReady, setIsCameraReady] = useState(false);
     const [calibratedProfile, setCalibratedProfile] = useState(() => {
         try {
             const saved = localStorage.getItem('rubiks_solver_calibrated_profile');
@@ -248,8 +284,15 @@ const Scanner = () => {
         navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment", width: 1280, height: 720 } })
             .then(stream => {
                 activeStream = stream;
-                if (mainVideoRef.current) mainVideoRef.current.srcObject = stream;
-                if (calibrateVideoRef.current) calibrateVideoRef.current.srcObject = stream;
+                if (mainVideoRef.current) {
+                    mainVideoRef.current.srcObject = stream;
+                    mainVideoRef.current.onloadedmetadata = () => setIsCameraReady(true);
+                }
+                if (calibrateVideoRef.current) {
+                    calibrateVideoRef.current.srcObject = stream;
+                    calibrateVideoRef.current.onloadedmetadata = () => setIsCameraReady(true);
+                }
+                setIsCameraReady(true);
             })
             .catch(err => console.error("Camera failed", err));
 
@@ -417,20 +460,23 @@ const Scanner = () => {
     }, []);
 
     const resetForNewCube = () => {
-        setFinalSolution(null);
-        setSolutionMoves([]);
-        setIsEasterEgg(false);
-        hasCelebrated.current = false;
-        setCurrentMoveIndex(0);
-        setFaceData({ up: null, left: null, front: null, right: null, back: null, down: null });
-        setScanProgress(0);
-        setSolveError(null);
-        setIsAutoScanning(true);
-        setDetectedFace("Searching...");
-        setIsCubePresent(false);
-        setValidCount(0);
+        setIsPlaying(false);
         changeView('main');
-        axios.post(`${API_BASE_URL}/reset`).catch(() => { /* ignore */ });
+        setTimeout(() => {
+            setFinalSolution(null);
+            setSolutionMoves([]);
+            setIsEasterEgg(false);
+            hasCelebrated.current = false;
+            setCurrentMoveIndex(0);
+            setFaceData({ up: null, left: null, front: null, right: null, back: null, down: null });
+            setScanProgress(0);
+            setSolveError(null);
+            setIsAutoScanning(true);
+            setDetectedFace("Searching...");
+            setIsCubePresent(false);
+            setValidCount(0);
+            axios.post(`${API_BASE_URL}/reset`).catch(() => { /* ignore */ });
+        }, 800);
     };
 
     const handleMoveComplete = () => {
@@ -526,7 +572,7 @@ const Scanner = () => {
                 <div style={{ position: 'relative', zIndex: 1, display: 'flex', width: '300vw', height: '100vh', transform: `translateX(${translatePos})`, transition: cinematicTransition }}>
 
                     {/* ================= STAGE 1: CALIBRATE CUBE ================= */}
-                    <div style={{ width: '100vw', height: '100vh', padding: '24px', boxSizing: 'border-box', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '32px', position: 'relative' }}>
+                    <div style={{ width: '100vw', height: '100vh', padding: '24px', boxSizing: 'border-box', display: 'flex', justifyContent: 'center', alignItems: 'center', position: 'relative' }}>
 
                         <div style={{ position: 'absolute', top: '28px', right: '32px', zIndex: 10 }}>
                             <button onClick={() => changeView('main')} style={btnStyle}>
@@ -534,157 +580,174 @@ const Scanner = () => {
                             </button>
                         </div>
 
-                        <div style={{
-                            display: 'flex', flexDirection: 'column', alignItems: 'center', background: PANEL_BG,
-                            padding: '28px', borderRadius: '16px', border: '1px solid rgba(255, 255, 255, 0.12)',
-                            boxShadow: '0 24px 60px rgba(0, 0, 0, 0.8)', maxWidth: '720px', width: '100%'
-                        }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
-                                <span style={{ fontSize: '20px' }}>🎯</span>
-                                <h1 style={{ color: TEXT_PRIMARY, margin: 0, fontSize: '1.9rem', fontWeight: '800' }}>Calibrate Cube</h1>
-                            </div>
-                            <p style={{ color: TEXT_SECONDARY, margin: '0 0 16px 0', fontSize: '14px', textAlign: 'center' }}>
-                                Samples your cube's actual physical stickers to completely overwrite defaults for perfect recognition.
-                            </p>
+                        <div style={{ display: 'flex', alignItems: 'stretch', gap: '32px', maxWidth: '1120px', width: '100%', justifyContent: 'center' }}>
 
                             <div style={{
-                                position: 'relative', width: '100%', maxWidth: '620px', aspectRatio: '16/9',
-                                backgroundColor: '#000', borderRadius: '10px', border: `2px solid ${currentStep.colorHex}`,
-                                overflow: 'hidden'
+                                display: 'flex', flexDirection: 'column', alignItems: 'center', background: PANEL_BG,
+                                padding: '28px', borderRadius: '16px', border: '1px solid rgba(255, 255, 255, 0.12)',
+                                boxShadow: '0 24px 60px rgba(0, 0, 0, 0.8)', maxWidth: '720px', flex: '1 1 680px'
                             }}>
-                                <video ref={calibrateVideoRef} autoPlay playsInline muted style={{ width: '100%', height: '100%', objectFit: 'cover', transform: 'scaleX(-1)' }} />
-
-                                {/* 3x3 alignment grid */}
-                                <div style={{
-                                    position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)',
-                                    height: '80%', aspectRatio: '1/1', border: `2px dashed ${currentStep.colorHex}`,
-                                    borderRadius: '8px', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gridTemplateRows: 'repeat(3, 1fr)',
-                                    pointerEvents: 'none'
-                                }}>
-                                    {[...Array(9)].map((_, i) => (
-                                        <div key={i} style={{
-                                            border: '1px solid rgba(255,255,255,0.18)',
-                                            display: 'flex', alignItems: 'center', justifyContent: 'center'
-                                        }}>
-                                            {i === 4 && (
-                                                <div style={{
-                                                    width: '50%', height: '50%', borderRadius: '50%',
-                                                    border: `2px solid ${currentStep.colorHex}`,
-                                                    background: `${currentStep.colorHex}33`
-                                                }} />
-                                            )}
-                                        </div>
-                                    ))}
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
+                                    <h1 style={{ color: TEXT_PRIMARY, margin: 0, fontSize: '1.9rem', fontWeight: '800' }}>Calibrate Cube</h1>
                                 </div>
-                            </div>
+                                <p style={{ color: TEXT_SECONDARY, margin: '0 0 16px 0', fontSize: '14px', textAlign: 'center' }}>
+                                    Samples your cube's actual physical stickers to completely overwrite defaults for perfect recognition.
+                                </p>
 
-                            <canvas ref={calibrateCanvasRef} style={{ display: 'none' }} />
-
-                            {calibrateWarning && (
                                 <div style={{
-                                    marginTop: '12px', padding: '10px 16px', background: 'rgba(239, 68, 68, 0.12)',
-                                    color: RED_ACCENT, border: `1px solid ${RED_ACCENT}`, borderRadius: '8px',
-                                    fontWeight: '700', fontSize: '13px', textAlign: 'center', width: '100%', boxSizing: 'border-box'
+                                    position: 'relative', width: '100%', maxWidth: '620px', aspectRatio: '16/9', minHeight: '340px',
+                                    backgroundColor: '#000', borderRadius: '10px', border: `2px solid ${currentStep.colorHex}`,
+                                    overflow: 'hidden'
                                 }}>
-                                    {calibrateWarning}
-                                </div>
-                            )}
+                                    {!isCameraReady && <CameraSkeleton />}
+                                    <video
+                                        ref={calibrateVideoRef}
+                                        autoPlay
+                                        playsInline
+                                        muted
+                                        onLoadedData={() => setIsCameraReady(true)}
+                                        style={{ width: '100%', height: '100%', objectFit: 'cover', transform: 'scaleX(-1)' }}
+                                    />
 
-                            <div style={{ marginTop: '16px', display: 'flex', gap: '12px', width: '100%', maxWidth: '620px' }}>
-                                <button
-                                    onClick={captureCalibrationStep}
-                                    disabled={isCalibratingLoading}
-                                    style={{
-                                        ...btnStyle, flex: 2, padding: '14px', fontSize: '14px',
-                                        background: isCalibratingLoading ? '#222' : 'rgba(255, 107, 0, 0.14)'
-                                    }}
-                                >
-                                    {isCalibratingLoading ? 'SAMPLING...' : (isCurrentStepDone ? `📸 RE-CAPTURE ${currentStep.name.toUpperCase()} FACE` : `📸 CAPTURE ${currentStep.name.toUpperCase()} FACE`)}
-                                </button>
-                                {calibrationIndex > 0 && (
-                                    <button
-                                        onClick={() => setCalibrationIndex(prev => prev - 1)}
-                                        style={{ ...neutralBtnStyle, flex: 1, padding: '14px' }}
-                                    >
-                                        ← PREVIOUS
-                                    </button>
-                                )}
-                            </div>
-                        </div>
-
-                        {/* Calibration Stepper & Guidelines Card */}
-                        <div style={{
-                            background: PANEL_BG, padding: '26px', borderRadius: '16px', display: 'flex',
-                            flexDirection: 'column', minWidth: '330px', maxWidth: '370px',
-                            border: '1px solid rgba(255, 255, 255, 0.12)', boxShadow: '0 24px 60px rgba(0,0,0,0.8)'
-                        }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                                <span style={{ fontSize: '15px', fontWeight: '800', color: TEXT_PRIMARY }}>Calibration Steps</span>
-                                <span style={{ fontSize: '13px', fontWeight: '700', color: ORANGE_PRIMARY }}>{calibratedCount} / 6 Complete</span>
-                            </div>
-
-                            {/* 6 Step badges */}
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '18px' }}>
-                                {CALIBRATION_STEPS.map((step, idx) => {
-                                    const isDone = !!calibratedSteps[step.key];
-                                    const isCurrent = idx === calibrationIndex;
-                                    const saved = calibratedSteps[step.key];
-
-                                    return (
-                                        <div
-                                            key={step.key}
-                                            onClick={() => setCalibrationIndex(idx)}
-                                            style={{
-                                                display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 14px',
-                                                borderRadius: '8px', cursor: 'pointer',
-                                                background: isCurrent ? 'rgba(255, 107, 0, 0.08)' : (isDone ? 'rgba(255, 255, 255, 0.03)' : '#08090C'),
-                                                border: isCurrent ? `1.5px solid ${ORANGE_PRIMARY}` : (isDone ? '1px solid rgba(255, 255, 255, 0.16)' : '1px solid rgba(255, 255, 255, 0.06)'),
-                                                transition: 'all 0.2s ease'
-                                            }}
-                                        >
-                                            <div style={{
-                                                width: '26px', height: '26px', borderRadius: '6px',
-                                                background: saved ? `rgb(${saved.rgb.join(',')})` : step.colorHex,
-                                                border: '1px solid rgba(255,255,255,0.25)',
-                                                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                                fontWeight: '800', fontSize: '12px', color: step.textHex
+                                    {/* 3x3 alignment grid */}
+                                    <div style={{
+                                        position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)',
+                                        height: '80%', aspectRatio: '1/1', border: `2px dashed ${currentStep.colorHex}`,
+                                        borderRadius: '8px', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gridTemplateRows: 'repeat(3, 1fr)',
+                                        pointerEvents: 'none'
+                                    }}>
+                                        {[...Array(9)].map((_, i) => (
+                                            <div key={i} style={{
+                                                border: '1px solid rgba(255,255,255,0.18)',
+                                                display: 'flex', alignItems: 'center', justifyContent: 'center'
                                             }}>
-                                                {isDone ? '✓' : idx + 1}
-                                            </div>
-                                            <div style={{ flex: 1 }}>
-                                                <div style={{ fontWeight: '700', fontSize: '13px', color: isCurrent ? ORANGE_PRIMARY : (isDone ? TEXT_PRIMARY : TEXT_SECONDARY) }}>
-                                                    {step.name} <span style={{ fontSize: '11px', color: '#6E7687' }}>({step.badge})</span>
-                                                </div>
-                                                {saved && (
-                                                    <div style={{ fontSize: '10px', color: '#8A92A4', fontFamily: 'monospace' }}>
-                                                        RGB: [{saved.rgb.join(', ')}]
-                                                    </div>
+                                                {i === 4 && (
+                                                    <div style={{
+                                                        width: '50%', height: '50%', borderRadius: '50%',
+                                                        border: `2px solid ${currentStep.colorHex}`,
+                                                        background: `${currentStep.colorHex}33`
+                                                    }} />
                                                 )}
                                             </div>
-                                            {isDone && <span style={{ color: ORANGE_PRIMARY, fontSize: '12px', fontWeight: '700' }}>Saved</span>}
-                                        </div>
-                                    );
-                                })}
-                            </div>
-
-                            {/* Current Step Instruction Box */}
-                            <div style={{ background: CARD_BG, padding: '14px', borderRadius: '10px', borderLeft: `3px solid ${currentStep.colorHex}` }}>
-                                <div style={{ fontSize: '13px', fontWeight: '800', color: TEXT_PRIMARY, marginBottom: '6px' }}>
-                                    Step {calibrationIndex + 1}: {currentStep.name} ({currentStep.badge})
+                                        ))}
+                                    </div>
                                 </div>
-                                <p style={{ margin: 0, fontSize: '12px', color: TEXT_SECONDARY, lineHeight: '1.5' }}>
-                                    {currentStep.desc}
-                                </p>
+
+                                <canvas ref={calibrateCanvasRef} style={{ display: 'none' }} />
+
+                                {calibrateWarning && (
+                                    <div style={{
+                                        marginTop: '12px', padding: '10px 16px', background: 'rgba(239, 68, 68, 0.12)',
+                                        color: RED_ACCENT, border: `1px solid ${RED_ACCENT}`, borderRadius: '8px',
+                                        fontWeight: '700', fontSize: '13px', textAlign: 'center', width: '100%', boxSizing: 'border-box'
+                                    }}>
+                                        {calibrateWarning}
+                                    </div>
+                                )}
+
+                                <div style={{ marginTop: '16px', position: 'relative', width: '100%', maxWidth: '620px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                    <button
+                                        onClick={captureCalibrationStep}
+                                        disabled={isCalibratingLoading}
+                                        style={{
+                                            ...btnStyle, width: '240px', padding: '12px 14px', fontSize: '12.5px',
+                                            background: isCalibratingLoading ? '#222' : 'rgba(255, 107, 0, 0.14)'
+                                        }}
+                                    >
+                                        {isCalibratingLoading ? 'SAMPLING...' : (isCurrentStepDone ? `RE-CAPTURE ${currentStep.name.toUpperCase()} FACE` : `CAPTURE ${currentStep.name.toUpperCase()} FACE`)}
+                                    </button>
+                                    {calibrationIndex > 0 && (
+                                        <button
+                                            onClick={() => setCalibrationIndex(prev => prev - 1)}
+                                            style={{
+                                                ...neutralBtnStyle,
+                                                position: 'absolute',
+                                                right: 0,
+                                                padding: '12px 14px',
+                                                fontSize: '12px',
+                                                whiteSpace: 'nowrap'
+                                            }}
+                                        >
+                                            ← PREVIOUS FACE
+                                        </button>
+                                    )}
+                                </div>
                             </div>
 
-                            {calibratedCount === 6 && (
-                                <button
-                                    onClick={finishCalibrationManually}
-                                    style={{ ...btnStyle, marginTop: '16px', width: '100%', background: 'rgba(255, 107, 0, 0.16)' }}
-                                >
-                                    SAVE & START SOLVING →
-                                </button>
-                            )}
+                            {/* Calibration Stepper & Guidelines Card */}
+                            <div style={{
+                                background: PANEL_BG, padding: '26px', borderRadius: '16px', display: 'flex',
+                                flexDirection: 'column', height: '100%', justifyContent: 'space-between',
+                                minWidth: '330px', maxWidth: '370px', flex: '0 0 350px',
+                                border: '1px solid rgba(255, 255, 255, 0.12)', boxShadow: '0 24px 60px rgba(0,0,0,0.8)',
+                                boxSizing: 'border-box'
+                            }}>
+                                <div>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                                        <span style={{ fontSize: '15px', fontWeight: '800', color: TEXT_PRIMARY }}>Calibration Steps</span>
+                                        <span style={{ fontSize: '13px', fontWeight: '700', color: ORANGE_PRIMARY }}>{calibratedCount} / 6 Complete</span>
+                                    </div>
+
+                                    {/* 6 Step badges */}
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '18px' }}>
+                                        {CALIBRATION_STEPS.map((step, idx) => {
+                                            const isDone = !!calibratedSteps[step.key];
+                                            const isCurrent = idx === calibrationIndex;
+                                            const saved = calibratedSteps[step.key];
+
+                                            return (
+                                                <div
+                                                    key={step.key}
+                                                    onClick={() => setCalibrationIndex(idx)}
+                                                    style={{
+                                                        display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 14px',
+                                                        borderRadius: '8px', cursor: 'pointer',
+                                                        background: isCurrent ? 'rgba(255, 107, 0, 0.08)' : (isDone ? 'rgba(255, 255, 255, 0.03)' : '#08090C'),
+                                                        border: isCurrent ? `1.5px solid ${ORANGE_PRIMARY}` : (isDone ? '1px solid rgba(255, 255, 255, 0.16)' : '1px solid rgba(255, 255, 255, 0.06)'),
+                                                        transition: 'all 0.2s ease'
+                                                    }}
+                                                >
+                                                    <div style={{
+                                                        width: '26px', height: '26px', borderRadius: '6px',
+                                                        background: saved ? `rgb(${saved.rgb.join(',')})` : step.colorHex,
+                                                        border: '1px solid rgba(255,255,255,0.25)',
+                                                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                                        fontWeight: '900', fontSize: '13px', color: step.textHex
+                                                    }}>
+                                                        {isDone ? '✓' : idx + 1}
+                                                    </div>
+                                                    <div style={{ flex: 1 }}>
+                                                        <div style={{ fontWeight: '700', fontSize: '13px', color: isCurrent ? ORANGE_PRIMARY : (isDone ? TEXT_PRIMARY : TEXT_SECONDARY) }}>
+                                                            {step.name} <span style={{ fontSize: '11px', color: '#6E7687' }}>({step.badge})</span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+
+                                <div>
+                                    {/* Current Step Instruction Box */}
+                                    <div style={{ background: CARD_BG, padding: '14px', borderRadius: '10px', border: '1px solid rgba(255, 255, 255, 0.12)' }}>
+                                        <div style={{ fontSize: '13px', fontWeight: '800', color: TEXT_PRIMARY, marginBottom: '6px' }}>
+                                            Step {calibrationIndex + 1}: {currentStep.name} ({currentStep.badge})
+                                        </div>
+                                        <p style={{ margin: 0, fontSize: '12px', color: TEXT_SECONDARY, lineHeight: '1.5' }}>
+                                            {currentStep.desc}
+                                        </p>
+                                    </div>
+
+                                    {calibratedCount === 6 && (
+                                        <button
+                                            onClick={finishCalibrationManually}
+                                            style={{ ...btnStyle, marginTop: '16px', width: '100%', background: 'rgba(255, 107, 0, 0.16)' }}
+                                        >
+                                            SAVE & START SOLVING →
+                                        </button>
+                                    )}
+                                </div>
+                            </div>
                         </div>
                     </div>
 
@@ -694,15 +757,22 @@ const Scanner = () => {
                         {/* Top Left Toolbar */}
                         <div style={{ position: 'absolute', top: '28px', left: '32px', display: 'flex', flexDirection: 'column', gap: '10px', zIndex: 10 }}>
                             <button
-                                onClick={() => { setCalibrationIndex(0); changeView('calibrate'); }}
+                                onClick={() => {
+                                    setCalibrationIndex(0);
+                                    if (!calibratedProfile) {
+                                        setCalibratedSteps({});
+                                    }
+                                    changeView('calibrate');
+                                }}
                                 style={btnStyle}
                             >
-                                🎯 Recalibrate Cube
+                                Recalibrate Cube
                             </button>
                             {calibratedProfile && (
                                 <button
                                     onClick={() => {
                                         setCalibratedProfile(null);
+                                        setCalibratedSteps({});
                                         localStorage.removeItem('rubiks_solver_calibrated_profile');
                                         resetForNewCube();
                                     }}
@@ -715,7 +785,7 @@ const Scanner = () => {
                                 onClick={() => setShowDiagnostics(prev => !prev)}
                                 style={neutralBtnStyle}
                             >
-                                {showDiagnostics ? 'Hide Diagnostics' : '🔍 Diagnostics'}
+                                {showDiagnostics ? 'Hide Diagnostics' : 'Diagnostics'}
                             </button>
                         </div>
 
@@ -729,15 +799,6 @@ const Scanner = () => {
                                 Rubik&apos;s Solver AI
                             </h1>
 
-                            <div style={{
-                                fontSize: '13px', color: TEXT_SECONDARY, background: CARD_BG,
-                                border: '1px solid rgba(255, 255, 255, 0.08)', borderRadius: '20px',
-                                padding: '5px 16px', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px'
-                            }}>
-                                <span style={{ color: ORANGE_PRIMARY }}>●</span>
-                                <span>Calibrated Profile: <b>{calibratedProfile ? 'ACTIVE (Custom Palette)' : 'Default Sensors'}</b></span>
-                            </div>
-
                             <div style={{ height: '28px', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '8px' }}>
                                 <span style={{ color: TEXT_SECONDARY, fontSize: '14px', fontWeight: '600' }}>Status:</span>
                                 <b style={{ color: (isCubePresent && validCount === 9) ? ORANGE_PRIMARY : '#E0E4EE', fontSize: '15px' }}>
@@ -747,14 +808,22 @@ const Scanner = () => {
 
                             {/* Camera Viewport with Distinctive Outline */}
                             <div style={{
-                                position: 'relative', width: '100%', maxWidth: '680px', aspectRatio: '16/9',
+                                position: 'relative', width: '100%', maxWidth: '680px', aspectRatio: '16/9', minHeight: '340px',
                                 backgroundColor: '#000', borderRadius: '12px',
                                 border: isCubePresent && validCount === 9
                                     ? `2px solid ${ORANGE_PRIMARY}`
                                     : (isCubePresent ? '1.5px solid rgba(255, 107, 0, 0.5)' : '1px solid rgba(255, 255, 255, 0.16)'),
                                 overflow: 'hidden', transition: 'border-color 0.2s ease'
                             }}>
-                                <video ref={mainVideoRef} autoPlay playsInline muted style={{ width: '100%', height: '100%', objectFit: 'cover', transform: 'scaleX(-1)' }} />
+                                {!isCameraReady && <CameraSkeleton />}
+                                <video
+                                    ref={mainVideoRef}
+                                    autoPlay
+                                    playsInline
+                                    muted
+                                    onLoadedData={() => setIsCameraReady(true)}
+                                    style={{ width: '100%', height: '100%', objectFit: 'cover', transform: 'scaleX(-1)' }}
+                                />
 
                                 {/* 3x3 Overlay Grid */}
                                 <div style={{
@@ -837,28 +906,28 @@ const Scanner = () => {
                             flexDirection: 'column', alignItems: 'center', minWidth: '320px',
                             border: '1px solid rgba(255, 255, 255, 0.12)', boxShadow: '0 24px 60px rgba(0,0,0,0.8)'
                         }}>
-                            <h2 style={{ marginTop: 0, color: TEXT_PRIMARY, fontWeight: '800', letterSpacing: '-0.3px', fontSize: '1.4rem' }}>
-                                Scanned Faces
-                            </h2>
-                            <div style={{ background: CARD_BG, padding: '14px', borderRadius: '10px', width: '100%', marginBottom: '18px', fontSize: '12px', lineHeight: '1.6', borderLeft: `3px solid ${ORANGE_PRIMARY}`, boxSizing: 'border-box' }}>
+                            {/* Instructions at the Top */}
+                            <div style={{ background: CARD_BG, padding: '14px', borderRadius: '10px', width: '100%', marginBottom: '16px', fontSize: '12px', lineHeight: '1.6', border: '1px solid rgba(255, 255, 255, 0.12)', boxSizing: 'border-box' }}>
                                 <h3 style={{ marginTop: 0, color: TEXT_PRIMARY, marginBottom: '6px', fontSize: '13px', fontWeight: '800' }}>Instructions</h3>
                                 <div style={{ fontWeight: '700', color: ORANGE_PRIMARY, marginBottom: '2px' }}>1. Orientation guide:</div>
-                                {calibratedProfile ? (
-                                    <ul style={{ margin: 0, paddingLeft: '18px', color: TEXT_SECONDARY, marginBottom: '8px' }}>
-                                        <li>Main sides: hold <b style={{ color: TEXT_PRIMARY }}>{calibratedProfile.mapping.up?.displayName || 'White'}</b> on top.</li>
-                                        <li>{calibratedProfile.mapping.up?.displayName || 'White'} face: hold <b style={{ color: TEXT_PRIMARY }}>{calibratedProfile.mapping.back?.displayName || 'Blue'}</b> on top.</li>
-                                        <li>{calibratedProfile.mapping.down?.displayName || 'Yellow'} face: hold <b style={{ color: TEXT_PRIMARY }}>{calibratedProfile.mapping.front?.displayName || 'Green'}</b> on top.</li>
-                                    </ul>
-                                ) : (
-                                    <ul style={{ margin: 0, paddingLeft: '18px', color: TEXT_SECONDARY, marginBottom: '8px' }}>
-                                        <li>Main sides: hold <b style={{ color: TEXT_PRIMARY }}>White</b> on top.</li>
-                                        <li>White face: hold <b style={{ color: TEXT_PRIMARY }}>Blue</b> on top.</li>
-                                        <li>Yellow face: hold <b style={{ color: TEXT_PRIMARY }}>Green</b> on top.</li>
-                                    </ul>
-                                )}
+                                <ul style={{ margin: 0, paddingLeft: '18px', color: TEXT_SECONDARY, marginBottom: '8px' }}>
+                                    <li>White face: scan with Blue on top.</li>
+                                    <li>Yellow face: scan with Green on top.</li>
+                                    <li>Remaining sides must be scanned with White on top.</li>
+                                </ul>
                                 <div style={{ fontWeight: '700', color: ORANGE_PRIMARY, marginBottom: '2px' }}>2. How to scan:</div>
-                                <div style={{ color: TEXT_SECONDARY }}>Align cube in grid. All 9 stickers must be valid colors. Hold steady for 1.0 second.</div>
+                                <div style={{ color: TEXT_SECONDARY }}>Align cube in grid and hold steady for 1 second.</div>
                             </div>
+
+                            {/* Scanned Faces Title Below Instructions */}
+                            <h2 style={{ margin: '0 0 10px 0', color: TEXT_PRIMARY, fontWeight: '800', letterSpacing: '-0.3px', fontSize: '1.3rem', alignSelf: 'flex-start' }}>
+                                Scanned Faces
+                            </h2>
+
+                            {/* Divider Between Text and Cube Map */}
+                            <div style={{ width: '100%', height: '1px', background: 'rgba(255, 255, 255, 0.10)', marginBottom: '16px' }} />
+
+                            {/* Cube Map */}
                             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px' }}>
                                 <div /> <FaceGrid faceObj={faceData.up} label="Up" /> <div /> <div />
                                 <FaceGrid faceObj={faceData.left} label="Left" />
@@ -874,29 +943,42 @@ const Scanner = () => {
                     <div style={{ width: '100vw', height: '100vh', padding: '24px', boxSizing: 'border-box', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
 
                         <div style={{
-                            background: PANEL_BG, padding: '32px', borderRadius: '20px', width: '95%', maxWidth: '1020px',
+                            background: PANEL_BG, padding: '32px', borderRadius: '20px', width: '95%', maxWidth: '1140px', minHeight: '620px',
                             display: 'flex', gap: '32px', border: '1px solid rgba(255, 255, 255, 0.12)',
-                            boxShadow: '0 24px 60px rgba(0, 0, 0, 0.9)', alignItems: 'flex-start', flexWrap: 'wrap'
+                            boxShadow: '0 24px 60px rgba(0, 0, 0, 0.9)', alignItems: 'stretch', boxSizing: 'border-box'
                         }}>
-                            <div style={{ flex: '1 1 40%', minWidth: '280px' }}>
-                                <h1 style={{ marginTop: 0, color: TEXT_PRIMARY, fontSize: '2.4rem', fontWeight: '800', letterSpacing: '-0.5px' }}>
+                            <div style={{ flex: '1 1 38%', minWidth: '300px', display: 'flex', flexDirection: 'column' }}>
+                                <h1 style={{ marginTop: 0, marginBottom: '16px', color: TEXT_PRIMARY, fontSize: '2.4rem', fontWeight: '800', letterSpacing: '-0.5px' }}>
                                     Solution Ready
                                 </h1>
 
                                 {isEasterEgg ? (
-                                    <div style={{ textAlign: 'center' }}>
+                                    <div style={{ textAlign: 'center', marginTop: 'auto', marginBottom: 'auto' }}>
                                         <p style={{ fontSize: '18px', color: TEXT_PRIMARY, margin: '20px 0', lineHeight: '1.5', fontWeight: '700' }}>{finalSolution}</p>
                                         <img src="/solved-cake.png" alt="Solved!" style={{ maxWidth: '240px', borderRadius: '12px', border: `2px solid ${ORANGE_PRIMARY}` }} />
+                                        <button onClick={resetForNewCube} style={{ ...btnStyle, marginTop: '24px', width: '100%', padding: '14px', fontSize: '15px' }}>
+                                            ← SOLVE ANOTHER CUBE
+                                        </button>
                                     </div>
                                 ) : (
-                                    <>
-                                        <div style={{ margin: '18px 0', padding: '14px', background: CARD_BG, borderRadius: '10px', borderLeft: `3px solid ${ORANGE_PRIMARY}` }}>
-                                            <p style={{ fontSize: '12px', color: TEXT_SECONDARY, marginBottom: '8px', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Starting Orientation:</p>
-                                            <p style={{ fontSize: '13px', color: TEXT_PRIMARY, fontWeight: '700', margin: 0, display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+                                    <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                                        {/* Starting Orientation Container */}
+                                        <div style={{
+                                            padding: '12px 14px',
+                                            background: CARD_BG,
+                                            borderRadius: '10px',
+                                            border: '1px solid rgba(255, 255, 255, 0.12)',
+                                            width: '100%',
+                                            boxSizing: 'border-box'
+                                        }}>
+                                            <div style={{ fontSize: '11px', color: TEXT_SECONDARY, marginBottom: '6px', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                                                Starting Orientation:
+                                            </div>
+                                            <div style={{ fontSize: '12px', color: TEXT_PRIMARY, fontWeight: '700', display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
                                                 <span style={{
                                                     color: 'white',
                                                     background: calibratedProfile?.mapping.front ? `rgb(${calibratedProfile.mapping.front.rgb.join(',')})` : '#00B348',
-                                                    padding: '5px 10px', borderRadius: '4px', border: '1px solid rgba(255,255,255,0.2)'
+                                                    padding: '4px 9px', borderRadius: '4px', border: '1px solid rgba(255,255,255,0.2)'
                                                 }}>
                                                     {(calibratedProfile?.mapping.front?.displayName || "GREEN").toUpperCase()} FRONT
                                                 </span>
@@ -904,13 +986,14 @@ const Scanner = () => {
                                                 <span style={{
                                                     background: calibratedProfile?.mapping.up ? `rgb(${calibratedProfile.mapping.up.rgb.join(',')})` : '#F5F5F7',
                                                     color: calibratedProfile ? 'white' : 'black',
-                                                    padding: '5px 10px', borderRadius: '4px', border: '1px solid rgba(255,255,255,0.2)'
+                                                    padding: '4px 9px', borderRadius: '4px', border: '1px solid rgba(255,255,255,0.2)'
                                                 }}>
                                                     {(calibratedProfile?.mapping.up?.displayName || "WHITE").toUpperCase()} TOP
                                                 </span>
-                                            </p>
+                                            </div>
                                         </div>
 
+                                        {/* Solution Moves List */}
                                         <div style={{
                                             maxHeight: '220px', overflowY: 'auto', fontSize: '15px', fontFamily: 'monospace',
                                             fontWeight: '700', background: '#08090C', padding: '14px', borderRadius: '10px',
@@ -934,17 +1017,18 @@ const Scanner = () => {
                                                 );
                                             })}
                                         </div>
-                                    </>
-                                )}
 
-                                <button onClick={resetForNewCube} style={{ ...btnStyle, marginTop: '20px', width: '100%', padding: '14px', fontSize: '15px' }}>
-                                    ← SOLVE ANOTHER CUBE
-                                </button>
+                                        {/* Solve Another Cube Button */}
+                                        <button onClick={resetForNewCube} style={{ ...btnStyle, width: '100%', padding: '14px', fontSize: '15px' }}>
+                                            ← SOLVE ANOTHER CUBE
+                                        </button>
+                                    </div>
+                                )}
                             </div>
 
                             {!isEasterEgg && (
-                                <div style={{ flex: '1 1 50%', minWidth: '280px', width: '100%', display: 'flex', flexDirection: 'column' }}>
-                                    <div style={{ height: '390px', width: '100%', borderRadius: '14px', overflow: 'hidden' }}>
+                                <div style={{ flex: '1 1 56%', minWidth: '320px', width: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                                    <div style={{ height: '460px', width: '100%', borderRadius: '14px', overflow: 'hidden' }}>
                                         <Cube3D scrambledColors={scrambledColors} solutionMoves={solutionMoves} currentMoveIndex={currentMoveIndex} isPlaying={isPlaying} tps={tps} onMoveComplete={handleMoveComplete} />
                                     </div>
                                     <VisualizerControls isPlaying={isPlaying} setIsPlaying={setIsPlaying} tps={tps} setTps={setTps} currentMoveIndex={currentMoveIndex} totalMoves={solutionMoves.length} setCurrentMoveIndex={setCurrentMoveIndex} />
