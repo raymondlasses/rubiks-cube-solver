@@ -5,13 +5,13 @@ import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 
 const COLOR_PALETTE = {
-    'white':  '#F5F5F7',
+    'white':  '#FFFFFF',
     'yellow': '#FFD600',
-    'green':  '#00B348',
-    'blue':   '#0055D4',
-    'red':    '#D91E2E',
-    'orange': '#FF6500',
-    'black':  '#14161B'  // Premium internal speedcube core plastic
+    'green':  '#00C853',
+    'blue':   '#0066FF',
+    'red':    '#EE1C25',
+    'orange': '#FF6A00',
+    'black':  '#111216'  // Deep matte speedcube core plastic
 };
 
 const CUBE_SIZE = 0.985;
@@ -83,11 +83,11 @@ const RubiksCube = ({ scrambledColors, solutionMoves, currentMoveIndex, isPlayin
                 for (let z = -1; z <= 1; z++) {
                     const pos = new THREE.Vector3(x * SPACING, y * SPACING, z * SPACING);
 
-                    // High-end tactile speedcube interior plastic
+                    // Matte speedcube interior core plastic
                     const blackMat = new THREE.MeshStandardMaterial({
                         color: COLOR_PALETTE['black'],
-                        roughness: 0.45,
-                        metalness: 0.05
+                        roughness: 0.90,
+                        metalness: 0.0
                     });
                     const mats = Array(6).fill(blackMat);
 
@@ -110,11 +110,11 @@ const RubiksCube = ({ scrambledColors, solutionMoves, currentMoveIndex, isPlayin
         if (colorName && colorName.startsWith('rgb')) hex = colorName;
         else if (COLOR_PALETTE[colorName]) hex = COLOR_PALETTE[colorName];
 
-        // Authentic speedcube satin matte plastic finish with reduced glare
+        // Glossy competition speedcube exterior finish
         return new THREE.MeshStandardMaterial({
             color: hex,
-            roughness: 0.40,
-            metalness: 0.01
+            roughness: 0.18,
+            metalness: 0.04
         });
     }
 

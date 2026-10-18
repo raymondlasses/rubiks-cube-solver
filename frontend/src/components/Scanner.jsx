@@ -461,21 +461,27 @@ const Scanner = () => {
 
     const resetForNewCube = () => {
         setIsPlaying(false);
+        setIsAutoScanning(false);
         changeView('main');
+
+        // Immediately wipe Main Scan screen state so it is completely fresh and empty as it slides into view
+        setFaceData({ up: null, left: null, front: null, right: null, back: null, down: null });
+        setScanProgress(0);
+        setSolveError(null);
+        setDetectedFace("Searching...");
+        setIsCubePresent(false);
+        setValidCount(0);
+        axios.post(`${API_BASE_URL}/reset`).catch(() => { /* ignore */ });
+
+        // Defer clearing Solution screen state until it is completely out of view
         setTimeout(() => {
             setFinalSolution(null);
             setSolutionMoves([]);
+            setScrambledColors([]);
             setIsEasterEgg(false);
             hasCelebrated.current = false;
             setCurrentMoveIndex(0);
-            setFaceData({ up: null, left: null, front: null, right: null, back: null, down: null });
-            setScanProgress(0);
-            setSolveError(null);
             setIsAutoScanning(true);
-            setDetectedFace("Searching...");
-            setIsCubePresent(false);
-            setValidCount(0);
-            axios.post(`${API_BASE_URL}/reset`).catch(() => { /* ignore */ });
         }, 800);
     };
 
@@ -510,6 +516,7 @@ const Scanner = () => {
                 return;
             }
 
+            const isInitialCalibration = !calibratedProfile;
             const step = CALIBRATION_STEPS[calibrationIndex];
             const center = res.data.center;
             const updated = {
@@ -527,15 +534,30 @@ const Scanner = () => {
             setCalibratedSteps(updated);
             playSuccessSound();
 
-            if (calibrationIndex < CALIBRATION_STEPS.length - 1) {
-                setCalibrationIndex(prev => prev + 1);
-            } else {
+            const totalDone = Object.keys(updated).length;
+
+            if (totalDone === CALIBRATION_STEPS.length) {
                 // All 6 faces calibrated! Save profile as Ground Truth
                 const profile = { mapping: updated };
                 setCalibratedProfile(profile);
                 localStorage.setItem('rubiks_solver_calibrated_profile', JSON.stringify(profile));
-                resetForNewCube();
-                changeView('main');
+
+                // Only auto-move to main scan screen if calibrating over default state
+                if (isInitialCalibration) {
+                    resetForNewCube();
+                    changeView('main');
+                }
+            } else {
+                // Advance to next unscanned face
+                let nextIdx = (calibrationIndex + 1) % CALIBRATION_STEPS.length;
+                for (let i = 0; i < CALIBRATION_STEPS.length; i++) {
+                    const candidate = (calibrationIndex + 1 + i) % CALIBRATION_STEPS.length;
+                    if (!updated[CALIBRATION_STEPS[candidate].key]) {
+                        nextIdx = candidate;
+                        break;
+                    }
+                }
+                setCalibrationIndex(nextIdx);
             }
         } catch (err) {
             setCalibrateWarning(err.response?.data?.detail || "Capture failed. Check lighting and alignment.");
@@ -650,7 +672,7 @@ const Scanner = () => {
                                         onClick={captureCalibrationStep}
                                         disabled={isCalibratingLoading}
                                         style={{
-                                            ...btnStyle, width: '240px', padding: '12px 14px', fontSize: '12.5px',
+                                            ...btnStyle, width: '270px', padding: '12px 14px', fontSize: '12.5px',
                                             background: isCalibratingLoading ? '#222' : 'rgba(255, 107, 0, 0.14)'
                                         }}
                                     >
@@ -947,83 +969,82 @@ const Scanner = () => {
                             display: 'flex', gap: '32px', border: '1px solid rgba(255, 255, 255, 0.12)',
                             boxShadow: '0 24px 60px rgba(0, 0, 0, 0.9)', alignItems: 'stretch', boxSizing: 'border-box'
                         }}>
-                            <div style={{ flex: '1 1 38%', minWidth: '300px', display: 'flex', flexDirection: 'column' }}>
-                                <h1 style={{ marginTop: 0, marginBottom: '16px', color: TEXT_PRIMARY, fontSize: '2.4rem', fontWeight: '800', letterSpacing: '-0.5px' }}>
-                                    Solution Ready
-                                </h1>
+                            <div style={{ flex: '1 1 38%', minWidth: '300px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                    <h1 style={{ marginTop: 0, marginBottom: '16px', color: TEXT_PRIMARY, fontSize: '2.4rem', fontWeight: '800', letterSpacing: '-0.5px', textAlign: 'center' }}>
+                                        Solution Ready
+                                    </h1>
 
-                                {isEasterEgg ? (
-                                    <div style={{ textAlign: 'center', marginTop: 'auto', marginBottom: 'auto' }}>
-                                        <p style={{ fontSize: '18px', color: TEXT_PRIMARY, margin: '20px 0', lineHeight: '1.5', fontWeight: '700' }}>{finalSolution}</p>
-                                        <img src="/solved-cake.png" alt="Solved!" style={{ maxWidth: '240px', borderRadius: '12px', border: `2px solid ${ORANGE_PRIMARY}` }} />
-                                        <button onClick={resetForNewCube} style={{ ...btnStyle, marginTop: '24px', width: '100%', padding: '14px', fontSize: '15px' }}>
-                                            ← SOLVE ANOTHER CUBE
-                                        </button>
-                                    </div>
-                                ) : (
-                                    <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                                        {/* Starting Orientation Container */}
-                                        <div style={{
-                                            padding: '12px 14px',
-                                            background: CARD_BG,
-                                            borderRadius: '10px',
-                                            border: '1px solid rgba(255, 255, 255, 0.12)',
-                                            width: '100%',
-                                            boxSizing: 'border-box'
-                                        }}>
-                                            <div style={{ fontSize: '11px', color: TEXT_SECONDARY, marginBottom: '6px', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                                                Starting Orientation:
-                                            </div>
-                                            <div style={{ fontSize: '12px', color: TEXT_PRIMARY, fontWeight: '700', display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
-                                                <span style={{
-                                                    color: 'white',
-                                                    background: calibratedProfile?.mapping.front ? `rgb(${calibratedProfile.mapping.front.rgb.join(',')})` : '#00B348',
-                                                    padding: '4px 9px', borderRadius: '4px', border: '1px solid rgba(255,255,255,0.2)'
-                                                }}>
-                                                    {(calibratedProfile?.mapping.front?.displayName || "GREEN").toUpperCase()} FRONT
-                                                </span>
-                                                <span style={{ color: TEXT_SECONDARY }}>+</span>
-                                                <span style={{
-                                                    background: calibratedProfile?.mapping.up ? `rgb(${calibratedProfile.mapping.up.rgb.join(',')})` : '#F5F5F7',
-                                                    color: calibratedProfile ? 'white' : 'black',
-                                                    padding: '4px 9px', borderRadius: '4px', border: '1px solid rgba(255,255,255,0.2)'
-                                                }}>
-                                                    {(calibratedProfile?.mapping.up?.displayName || "WHITE").toUpperCase()} TOP
-                                                </span>
-                                            </div>
+                                    {isEasterEgg ? (
+                                        <div style={{ textAlign: 'center', marginTop: '20px' }}>
+                                            <p style={{ fontSize: '18px', color: TEXT_PRIMARY, margin: '20px 0', lineHeight: '1.5', fontWeight: '700' }}>{finalSolution}</p>
+                                            <img src="/solved-cake.png" alt="Solved!" style={{ maxWidth: '240px', borderRadius: '12px', border: `2px solid ${ORANGE_PRIMARY}` }} />
                                         </div>
-
-                                        {/* Solution Moves List */}
-                                        <div style={{
-                                            maxHeight: '220px', overflowY: 'auto', fontSize: '15px', fontFamily: 'monospace',
-                                            fontWeight: '700', background: '#08090C', padding: '14px', borderRadius: '10px',
-                                            border: '1px solid rgba(255, 255, 255, 0.10)', display: 'flex', flexWrap: 'wrap', gap: '8px', alignContent: 'flex-start'
-                                        }}>
-                                            {solutionMoves.map((move, index) => {
-                                                const isActive = index === currentMoveIndex;
-                                                return (
-                                                    <span key={index} onClick={() => { setIsPlaying(false); setCurrentMoveIndex(index); }}
-                                                        style={{
-                                                            padding: '8px 13px', borderRadius: '6px', cursor: 'pointer',
-                                                            background: isActive ? ORANGE_PRIMARY : CARD_BG,
-                                                            color: isActive ? '#08090C' : TEXT_PRIMARY,
-                                                            border: isActive ? `1.5px solid ${ORANGE_PRIMARY}` : '1px solid rgba(255, 255, 255, 0.10)',
-                                                            opacity: index < currentMoveIndex ? 0.35 : 1,
-                                                            transform: isActive ? 'scale(1.12)' : 'scale(1)',
-                                                            transition: 'all 0.15s ease'
-                                                        }}>
-                                                        {move}
+                                    ) : (
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                                            {/* Starting Orientation Container */}
+                                            <div style={{
+                                                padding: '12px 14px',
+                                                background: CARD_BG,
+                                                borderRadius: '10px',
+                                                border: '1px solid rgba(255, 255, 255, 0.12)',
+                                                width: '100%',
+                                                boxSizing: 'border-box'
+                                            }}>
+                                                <div style={{ fontSize: '11px', color: TEXT_SECONDARY, marginBottom: '6px', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                                                    Starting Orientation:
+                                                </div>
+                                                <div style={{ fontSize: '12px', color: TEXT_PRIMARY, fontWeight: '700', display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+                                                    <span style={{
+                                                        color: 'white',
+                                                        background: calibratedProfile?.mapping.front ? `rgb(${calibratedProfile.mapping.front.rgb.join(',')})` : '#00C853',
+                                                        padding: '4px 9px', borderRadius: '4px', border: '1px solid rgba(255,255,255,0.2)'
+                                                    }}>
+                                                        {(calibratedProfile?.mapping.front?.displayName || "GREEN").toUpperCase()} FRONT
                                                     </span>
-                                                );
-                                            })}
-                                        </div>
+                                                    <span style={{ color: TEXT_SECONDARY }}>+</span>
+                                                    <span style={{
+                                                        background: calibratedProfile?.mapping.up ? `rgb(${calibratedProfile.mapping.up.rgb.join(',')})` : '#FFFFFF',
+                                                        color: calibratedProfile ? 'white' : 'black',
+                                                        padding: '4px 9px', borderRadius: '4px', border: '1px solid rgba(255,255,255,0.2)'
+                                                    }}>
+                                                        {(calibratedProfile?.mapping.up?.displayName || "WHITE").toUpperCase()} TOP
+                                                    </span>
+                                                </div>
+                                            </div>
 
-                                        {/* Solve Another Cube Button */}
-                                        <button onClick={resetForNewCube} style={{ ...btnStyle, width: '100%', padding: '14px', fontSize: '15px' }}>
-                                            ← SOLVE ANOTHER CUBE
-                                        </button>
-                                    </div>
-                                )}
+                                            {/* Solution Moves List */}
+                                            <div style={{
+                                                maxHeight: '220px', overflowY: 'auto', fontSize: '15px', fontFamily: 'monospace',
+                                                fontWeight: '700', background: '#08090C', padding: '14px', borderRadius: '10px',
+                                                border: '1px solid rgba(255, 255, 255, 0.10)', display: 'flex', flexWrap: 'wrap', gap: '8px', alignContent: 'flex-start'
+                                            }}>
+                                                {solutionMoves.map((move, index) => {
+                                                    const isActive = index === currentMoveIndex;
+                                                    return (
+                                                        <span key={index} onClick={() => { setIsPlaying(false); setCurrentMoveIndex(index); }}
+                                                            style={{
+                                                                padding: '8px 13px', borderRadius: '6px', cursor: 'pointer',
+                                                                background: isActive ? ORANGE_PRIMARY : CARD_BG,
+                                                                color: isActive ? '#08090C' : TEXT_PRIMARY,
+                                                                border: isActive ? `1.5px solid ${ORANGE_PRIMARY}` : '1px solid rgba(255, 255, 255, 0.10)',
+                                                                opacity: index < currentMoveIndex ? 0.35 : 1,
+                                                                transform: isActive ? 'scale(1.12)' : 'scale(1)',
+                                                                transition: 'all 0.15s ease'
+                                                            }}>
+                                                            {move}
+                                                        </span>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Solve Another Cube Button permanently anchored to the bottom */}
+                                <button onClick={resetForNewCube} style={{ ...btnStyle, width: '100%', padding: '14px', fontSize: '15px', marginTop: 'auto' }}>
+                                    ← SOLVE ANOTHER CUBE
+                                </button>
                             </div>
 
                             {!isEasterEgg && (
